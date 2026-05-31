@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import type { Member, Session } from '../core/models/types';
 import { v4 as uuidv4 } from 'uuid';
 import { CostCalculator } from '../core/services/CostCalculator';
-import { Plus, Edit2, Trash2, Star, RefreshCw, Calendar, DollarSign } from 'lucide-react';
+import { Plus, Edit2, Trash2, Star, RefreshCw, Calendar, DollarSign, Search, Users, Wallet, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -50,6 +50,41 @@ function MemberTypeBadge({ type }: { type?: 'employee' | 'guest' | 'regular' }) 
     <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
       Thường
     </span>
+  );
+}
+
+function AuditMetricCard({
+  label,
+  value,
+  tone = 'default',
+  detail,
+}: {
+  label: string;
+  value: string;
+  tone?: 'default' | 'success' | 'danger' | 'info';
+  detail?: string;
+}) {
+  const toneClass = {
+    default: 'text-foreground',
+    success: 'text-green-600 dark:text-green-400',
+    danger: 'text-destructive',
+    info: 'text-sky-600 dark:text-sky-400',
+  }[tone];
+
+  return (
+    <Card className="bg-muted/30">
+      <CardContent className="flex min-h-[112px] flex-col justify-center gap-2 p-4 text-center">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </span>
+        <div className={`text-xl font-bold tabular-nums ${toneClass}`}>{value}</div>
+        {detail && (
+          <div className="text-[11px] text-muted-foreground">
+            {detail}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -131,6 +166,40 @@ export default function Members() {
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'regular' | 'employee' | 'guest'>('all');
+
+  const memberRows = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return members
+      .filter((member) => {
+        const memberType = member.membershipType ?? 'regular';
+        const matchesType = typeFilter === 'all' || memberType === typeFilter;
+        const matchesSearch = !normalizedSearch
+          || member.name.toLowerCase().includes(normalizedSearch)
+          || member.nickname?.toLowerCase().includes(normalizedSearch)
+          || member.phone?.toLowerCase().includes(normalizedSearch);
+        return matchesType && matchesSearch;
+      })
+      .toSorted((a, b) => {
+        if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+        return a.name.localeCompare(b.name, 'vi');
+      });
+  }, [members, searchTerm, typeFilter]);
+
+  const memberSummary = useMemo(() => {
+    return members.reduce(
+      (summary, member) => {
+        const type = member.membershipType ?? 'regular';
+        if (member.isActive) summary.active += 1;
+        if (type === 'regular') summary.prepaid += member.prepaidBalance ?? 0;
+        if (type === 'guest') summary.guests += 1;
+        if (type === 'employee') summary.employees += 1;
+        return summary;
+      },
+      { active: 0, prepaid: 0, guests: 0, employees: 0 }
+    );
+  }, [members]);
 
   const syncAllFinance = async () => {
     setIsSyncing(true);
@@ -361,10 +430,15 @@ export default function Members() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Thành viên</h1>
-        
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-pretty">Thành viên</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Quản lý danh sách chơi, trình độ và quỹ nạp trước.
+            </p>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-2">
           <Button 
             variant="outline" 
             size="sm" 
@@ -387,35 +461,35 @@ export default function Members() {
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Họ và tên</Label>
-	                  <Input 
-	                    id="name" 
-	                    name="name"
-	                    autoComplete="name"
-	                    value={formData.name} 
-	                    onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
-	                  />
+                    <Input 
+                      id="name" 
+                      name="name"
+                      autoComplete="name"
+                      value={formData.name} 
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
+                    />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="nickname">Biệt danh (Tùy chọn)</Label>
-	                  <Input 
-	                    id="nickname" 
-	                    name="nickname"
-	                    autoComplete="off"
-	                    value={formData.nickname} 
-	                    onChange={(e) => setFormData({ ...formData, nickname: e.target.value })} 
-	                  />
+                    <Input 
+                      id="nickname" 
+                      name="nickname"
+                      autoComplete="off"
+                      value={formData.nickname} 
+                      onChange={(e) => setFormData({ ...formData, nickname: e.target.value })} 
+                    />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Số điện thoại (Tùy chọn)</Label>
-	                  <Input 
-	                    id="phone" 
-	                    name="phone"
-	                    type="tel"
-	                    inputMode="tel"
-	                    autoComplete="tel"
-	                    value={formData.phone} 
-	                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
-	                  />
+                    <Input 
+                      id="phone" 
+                      name="phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={formData.phone} 
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
+                    />
                 </div>
 
                 {/* Skill Level */}
@@ -426,12 +500,12 @@ export default function Members() {
                       const info = skillLabels[level];
                       const isSelected = formData.skillLevel === level;
                       return (
-	                        <button
-	                          key={level}
-	                          type="button"
-	                          aria-pressed={isSelected}
-	                          onClick={() => setFormData({ ...formData, skillLevel: level })}
-	                          className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          <button
+                            key={level}
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() => setFormData({ ...formData, skillLevel: level })}
+                            className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-[background-color,border-color,box-shadow] text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             isSelected
                               ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
                               : 'border-input hover:border-primary/50 hover:bg-muted'
@@ -453,24 +527,24 @@ export default function Members() {
                 <div className="space-y-2">
                   <Label>Loại thành viên</Label>
                   <div className="grid grid-cols-3 gap-2">
-	                    {([
-	                      { value: 'regular', label: 'Thường' },
-	                      { value: 'employee', label: 'Nhân viên công ty' },
-	                      { value: 'guest', label: 'Vãng lai' },
-	                    ] as const).map((type) => {
+                      {([
+                        { value: 'regular', label: 'Thường' },
+                        { value: 'employee', label: 'Nhân viên công ty' },
+                        { value: 'guest', label: 'Vãng lai' },
+                      ] as const).map((type) => {
                       const isSelected = (formData.membershipType || 'regular') === type.value;
                       return (
-	                        <button
-	                          key={type.value}
-	                          type="button"
-	                          aria-pressed={isSelected}
-	                          onClick={() => setFormData({ 
-	                            ...formData, 
-	                            membershipType: type.value,
+                          <button
+                            key={type.value}
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() => setFormData({ 
+                              ...formData, 
+                              membershipType: type.value,
                             prepaidBalance: type.value === 'regular' ? (formData.prepaidBalance ?? 0) : 0,
                             debt: type.value === 'employee' ? 0 : (formData.debt ?? 0)
                           })}
-	                          className={`flex flex-col items-center justify-center p-2.5 rounded-lg border-2 transition-all text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                            className={`flex flex-col items-center justify-center p-2.5 rounded-lg border-2 transition-[background-color,border-color,box-shadow] text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             isSelected
                               ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
                               : 'border-input hover:border-primary/50 hover:bg-muted'
@@ -491,7 +565,7 @@ export default function Members() {
                       id="prepaidBalance" 
                       value={formData.prepaidBalance ?? 0} 
                       onChange={(val) => setFormData({ ...formData, prepaidBalance: val })} 
-	                      placeholder="VD: 500,000…"
+                        placeholder="VD: 500,000…"
                     />
                     <p className="text-[11px] text-muted-foreground text-primary">
                       Tiền chơi mỗi buổi sẽ tự động trừ vào quỹ này.
@@ -507,7 +581,7 @@ export default function Members() {
                       id="debt" 
                       value={formData.debt ?? 0} 
                       onChange={(val) => setFormData({ ...formData, debt: val })} 
-	                      placeholder="VD: 0…"
+                        placeholder="VD: 0…"
                     />
                   </div>
                 )}
@@ -524,13 +598,97 @@ export default function Members() {
             </DialogContent>
           </Dialog>
         </div>
-      </div>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Danh sách thành viên</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <div className="grid gap-3 md:grid-cols-4">
+          <Card>
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                <Users className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Đang hoạt động</p>
+                <p className="text-2xl font-bold tabular-nums">{memberSummary.active}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="rounded-lg bg-green-100 p-2 text-green-700 dark:bg-green-950 dark:text-green-300">
+                <Wallet className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Quỹ đã nạp</p>
+                <p className="text-2xl font-bold tabular-nums text-green-600 dark:text-green-400">{formatVnd(memberSummary.prepaid)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                <Users className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Nhân viên</p>
+                <p className="text-2xl font-bold tabular-nums">{memberSummary.employees}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="rounded-lg bg-amber-100 p-2 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                <AlertCircle className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Khách vãng lai</p>
+                <p className="text-2xl font-bold tabular-nums">{memberSummary.guests}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <CardTitle>Danh sách thành viên</CardTitle>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="relative sm:w-72">
+                  <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    name="member-search"
+                    autoComplete="off"
+                    placeholder="Tìm tên, biệt danh, số điện thoại…"
+                    className="pl-8"
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                  />
+                </div>
+                <div className="flex rounded-lg border bg-background p-0.5">
+                  {([
+                    { value: 'all', label: 'Tất cả' },
+                    { value: 'regular', label: 'Thường' },
+                    { value: 'employee', label: 'Nhân viên' },
+                    { value: 'guest', label: 'Vãng lai' },
+                  ] as const).map((filter) => (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      aria-pressed={typeFilter === filter.value}
+                      onClick={() => setTypeFilter(filter.value)}
+                      className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        typeFilter === filter.value
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
@@ -542,29 +700,29 @@ export default function Members() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
-                    Chưa có thành viên nào. Hãy thêm thành viên đầu tiên!
-                  </TableCell>
-                </TableRow>
-              ) : (
-                members.map((member) => (
+                {memberRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                      {members.length === 0 ? 'Chưa có thành viên nào. Hãy thêm thành viên đầu tiên.' : 'Không tìm thấy thành viên phù hợp.'}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  memberRows.map((member) => (
                   <TableRow key={member.id}>
-	                    <TableCell className="font-medium">
-	                      <button
-	                        type="button"
-	                        className="flex flex-col gap-1 text-left cursor-pointer group rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-	                        onClick={() => openAuditDialog(member)}
-	                      >
-	                        <div className="flex items-center gap-1.5 flex-wrap group-hover:underline text-primary">
-	                          <span>{member.name}</span>
-	                          {member.nickname && <span className="text-muted-foreground text-xs font-normal">({member.nickname})</span>}
+                      <TableCell className="font-medium">
+                        <button
+                          type="button"
+                          className="flex flex-col gap-1 text-left cursor-pointer group rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          onClick={() => openAuditDialog(member)}
+                        >
+                          <div className="flex items-center gap-1.5 flex-wrap group-hover:underline text-primary">
+                            <span>{member.name}</span>
+                            {member.nickname && <span className="text-muted-foreground text-xs font-normal">({member.nickname})</span>}
                         </div>
-	                        <div>
-	                          <MemberTypeBadge type={member.membershipType} />
-	                        </div>
-	                      </button>
+                          <div>
+                            <MemberTypeBadge type={member.membershipType} />
+                          </div>
+                        </button>
                     </TableCell>
                     <TableCell>
                       <SkillBadge level={member.skillLevel || 2} />
@@ -592,11 +750,11 @@ export default function Members() {
                             return (
                               <div className="flex flex-col items-end gap-1">
                                 <span className="text-destructive font-bold">
-	                                  Nợ: {formatVnd(debt)}
+                                    Nợ: {formatVnd(debt)}
                                 </span>
                                 {balance > 0 && (
                                   <span className="text-green-600 dark:text-green-400 font-semibold text-xs">
-	                                    Quỹ: {formatVnd(balance)}
+                                      Quỹ: {formatVnd(balance)}
                                   </span>
                                 )}
                               </div>
@@ -605,7 +763,7 @@ export default function Members() {
                           
                           return (
                             <span className="font-semibold text-green-600 dark:text-green-400">
-	                              Quỹ: {formatVnd(balance)}
+                                Quỹ: {formatVnd(balance)}
                             </span>
                           );
                         }
@@ -615,18 +773,18 @@ export default function Members() {
                         // Vãng lai
                         return (
                           <span className={debt > 0 ? 'text-destructive font-bold' : 'text-muted-foreground'}>
-	                            Nợ: {formatVnd(debt)}
+                              Nợ: {formatVnd(debt)}
                           </span>
                         );
                       })()}
                     </TableCell>
                     <TableCell className="text-right space-x-2">
-	                      <Button variant="ghost" size="icon" aria-label={`Sửa ${member.name}`} onClick={() => openEditDialog(member)}>
-	                        <Edit2 className="h-4 w-4" aria-hidden="true" />
-	                      </Button>
-	                      <Button variant="ghost" size="icon" aria-label={`Xóa ${member.name}`} onClick={() => setMemberToDelete(member)}>
-	                        <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
-	                      </Button>
+                        <Button variant="ghost" size="icon" aria-label={`Sửa ${member.name}`} onClick={() => openEditDialog(member)}>
+                          <Edit2 className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                        <Button variant="ghost" size="icon" aria-label={`Xóa ${member.name}`} onClick={() => setMemberToDelete(member)}>
+                          <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                        </Button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -634,37 +792,37 @@ export default function Members() {
             </TableBody>
           </Table>
         </CardContent>
-	      </Card>
+        </Card>
 
-	      <Dialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
-	        <DialogContent>
-	          <DialogHeader>
-	            <DialogTitle>Xóa thành viên?</DialogTitle>
-	            <DialogDescription>
-	              Thành viên {memberToDelete?.name} sẽ bị xóa khỏi danh sách. Hành động này không thể hoàn tác.
-	            </DialogDescription>
-	          </DialogHeader>
-	          <div className="flex justify-end gap-2">
-	            <Button variant="outline" onClick={() => setMemberToDelete(null)}>
-	              Hủy
-	            </Button>
-	            <Button
-	              variant="destructive"
-	              onClick={async () => {
-	                if (!memberToDelete) return;
-	                await deleteMember(memberToDelete.id);
-	                setMemberToDelete(null);
-	              }}
-	            >
-	              Xóa thành viên
-	            </Button>
-	          </div>
-	        </DialogContent>
-	      </Dialog>
+        <Dialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Xóa thành viên?</DialogTitle>
+              <DialogDescription>
+                Thành viên {memberToDelete?.name} sẽ bị xóa khỏi danh sách. Hành động này không thể hoàn tác.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setMemberToDelete(null)}>
+                Hủy
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  if (!memberToDelete) return;
+                  await deleteMember(memberToDelete.id);
+                  setMemberToDelete(null);
+                }}
+              >
+                Xóa thành viên
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-	      {/* Audit & Finance Dialog */}
+        {/* Audit & Finance Dialog */}
       <Dialog open={isAuditOpen} onOpenChange={setIsAuditOpen}>
-        <DialogContent className="w-[95vw] md:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-h-[88vh] overflow-y-auto p-6 md:max-w-5xl">
           {selectedAuditMember && (() => {
             const member = selectedAuditMember;
             const type = member.membershipType || 'regular';
@@ -678,11 +836,11 @@ export default function Members() {
             
             return (
               <div className="space-y-6 py-2">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                    <span>Lịch sử hoạt động & Tài chính: {member.name}</span>
-                    <MemberTypeBadge type={type} />
-                  </DialogTitle>
+                  <DialogHeader>
+                    <DialogTitle className="flex flex-wrap items-center gap-2 pr-8 text-2xl font-bold text-pretty">
+                      <span>Lịch sử hoạt động & Tài chính: {member.name}</span>
+                      <MemberTypeBadge type={type} />
+                    </DialogTitle>
                 </DialogHeader>
 
                 {/* 1. THÀNH VIÊN THƯỜNG */}
@@ -694,43 +852,17 @@ export default function Members() {
                   return (
                     <div className="space-y-4">
                       {/* Thống kê nhanh */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Card className="bg-muted/30">
-                          <CardContent className="p-3 text-center space-y-1 relative">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Số dư Quỹ tháng này</span>
-                            <div className="text-base font-bold text-green-600 dark:text-green-400">
-	                              {formatVnd(balance)}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground absolute bottom-1 right-2">
-	                              Mang sang: <span className="font-semibold text-foreground">{formatVnd(prevStats.rawBalance)}</span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-muted/30">
-                          <CardContent className="p-3 text-center space-y-1 relative">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Nợ tháng này</span>
-                            <div className="text-base font-bold text-destructive">
-	                              {formatVnd(debt)}
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-muted/30">
-                          <CardContent className="p-3 text-center space-y-1">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Đã nạp trong tháng</span>
-                            <div className="text-base font-bold text-sky-600 dark:text-sky-400">
-	                              {formatVnd(currentStats.totalDeposited)}
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-muted/30">
-                          <CardContent className="p-3 text-center space-y-1">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Đã chơi trong tháng</span>
-                            <div className="text-base font-bold text-destructive">
-	                              {formatVnd(currentStats.totalPlayedCost)}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          <AuditMetricCard
+                            label="Số dư quỹ tháng này"
+                            value={formatVnd(balance)}
+                            tone="success"
+                            detail={`Mang sang: ${formatVnd(prevStats.rawBalance)}`}
+                          />
+                          <AuditMetricCard label="Nợ tháng này" value={formatVnd(debt)} tone="danger" />
+                          <AuditMetricCard label="Đã nạp trong tháng" value={formatVnd(currentStats.totalDeposited)} tone="info" />
+                          <AuditMetricCard label="Đã chơi trong tháng" value={formatVnd(currentStats.totalPlayedCost)} tone="danger" />
+                        </div>
 
                       {/* Lịch sử chơi & Trừ quỹ */}
                       <Card>
@@ -753,14 +885,14 @@ export default function Members() {
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {currentStats.attendedSessions
-                                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                    {currentStats.attendedSessions
+                                      .toSorted((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                                     .map(s => (
                                       <TableRow key={s.id} className="text-xs">
-	                                        <TableCell className="py-2 font-medium">{formatFullDate(s.date)}</TableCell>
+                                          <TableCell className="py-2 font-medium">{formatFullDate(s.date)}</TableCell>
                                         <TableCell className="py-2 truncate max-w-[120px]">{s.location}</TableCell>
                                         <TableCell className="py-2 text-right font-semibold text-destructive">
-	                                          -{formatVnd(s.costPerPerson)}
+                                            -{formatVnd(s.costPerPerson)}
                                         </TableCell>
                                       </TableRow>
                                     ))}
@@ -792,14 +924,14 @@ export default function Members() {
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {currentStats.deposits
-                                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                    {currentStats.deposits
+                                      .toSorted((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                                     .map(d => (
                                       <TableRow key={d.id} className="text-xs">
-	                                        <TableCell className="py-2 font-medium">{formatFullDate(d.date)}</TableCell>
+                                          <TableCell className="py-2 font-medium">{formatFullDate(d.date)}</TableCell>
                                         <TableCell className="py-2 truncate max-w-[160px]">{d.description}</TableCell>
                                         <TableCell className="py-2 text-right font-bold text-green-600 dark:text-green-400">
-	                                          +{formatVnd(d.amount)}
+                                            +{formatVnd(d.amount)}
                                         </TableCell>
                                       </TableRow>
                                     ))}
@@ -820,48 +952,24 @@ export default function Members() {
                   return (
                     <div className="space-y-4">
                       {/* Thống kê nhanh */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Card className="bg-muted/30">
-                          <CardContent className="p-3 text-center space-y-1 relative">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Tổng nợ đến hiện tại</span>
-                            <div className="text-base font-extrabold text-destructive">
-	                              {formatVnd(cumulativeStats.debt)}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground absolute bottom-1 right-2">
-	                              Mang sang: <span className="font-semibold text-foreground">{formatVnd(prevStats.debt)}</span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-muted/30">
-                          <CardContent className="p-3 text-center space-y-1">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Đi trong tháng</span>
-                            <div className="text-base font-bold">{currentStats.attendedSessions.length} buổi</div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-muted/30">
-                          <CardContent className="p-3 text-center space-y-1">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Đã đóng trong tháng</span>
-                            <div className="text-base font-bold text-green-600 dark:text-green-400">
-                              {currentStats.deposits.length} lần
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-muted/30">
-                          <CardContent className="p-3 text-center space-y-1">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold">Phát sinh nợ mới</span>
-                            <div className="text-base font-bold text-destructive">
-	                              {formatVnd(currentStats.debt)}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          <AuditMetricCard
+                            label="Tổng nợ đến hiện tại"
+                            value={formatVnd(cumulativeStats.debt)}
+                            tone="danger"
+                            detail={`Mang sang: ${formatVnd(prevStats.debt)}`}
+                          />
+                          <AuditMetricCard label="Đi trong tháng" value={`${currentStats.attendedSessions.length} buổi`} />
+                          <AuditMetricCard label="Đã đóng trong tháng" value={`${currentStats.deposits.length} lần`} tone="success" />
+                          <AuditMetricCard label="Phát sinh nợ mới" value={formatVnd(currentStats.debt)} tone="danger" />
+                        </div>
 
                       {/* Chi tiết đóng phí theo buổi */}
                       <Card>
                         <CardHeader className="py-3 px-4">
                           <CardTitle className="text-sm font-bold flex items-center justify-between">
                             <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4 text-muted-foreground" /> Quản lý đóng phí theo buổi chơi</span>
-	                            <span className="text-xs font-semibold text-primary">Tick đóng 35k/buổi</span>
+                              <span className="text-xs font-semibold text-primary">Tick đóng 35k/buổi</span>
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
@@ -879,23 +987,23 @@ export default function Members() {
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {currentStats.attendedSessions
-                                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                    {currentStats.attendedSessions
+                                      .toSorted((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                                     .map(s => {
                                       const isPaid = paidIds.includes(s.id);
                                       return (
                                         <TableRow key={s.id} className="text-xs">
-	                                          <TableCell className="py-2 font-medium">{formatFullDate(s.date)}</TableCell>
+                                            <TableCell className="py-2 font-medium">{formatFullDate(s.date)}</TableCell>
                                           <TableCell className="py-2 truncate max-w-[120px]">{s.location}</TableCell>
-	                                          <TableCell className="py-2 font-bold text-amber-600">{formatVnd(35000)}</TableCell>
+                                            <TableCell className="py-2 font-bold text-amber-600">{formatVnd(35000)}</TableCell>
                                           <TableCell className="py-2 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isPaid ? 'bg-green-100 text-green-800' : 'bg-destructive/10 text-destructive'}`}>
                                                 {isPaid ? 'Đã đóng' : 'Chưa đóng (Nợ)'}
                                               </span>
-	                                              <Checkbox 
-	                                                aria-label={`Đánh dấu ${member.name} đã đóng phí buổi ${formatFullDate(s.date)}`}
-	                                                checked={isPaid}
+                                                <Checkbox 
+                                                  aria-label={`Đánh dấu ${member.name} đã đóng phí buổi ${formatFullDate(s.date)}`}
+                                                  checked={isPaid}
                                                 onCheckedChange={(checked) => handleToggleGuestSessionPayment(member, s, checked as boolean)}
                                               />
                                             </div>
@@ -918,8 +1026,8 @@ export default function Members() {
                   <div className="space-y-4">
                     <Card className="bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200">
                       <CardContent className="p-4 text-xs text-emerald-800 dark:text-emerald-300 space-y-1 leading-relaxed">
-	                        <p className="font-bold">Hỗ trợ đặc biệt cho Nhân viên công ty:</p>
-	                        <p>Thành viên này được phân loại là Nhân viên công ty. Do đó, toàn bộ tiền sân và tiền cầu của họ đi chơi tại tất cả các buổi đều được Quỹ hỗ trợ của công ty chi trả 100%.</p>
+                          <p className="font-bold">Hỗ trợ đặc biệt cho Nhân viên công ty:</p>
+                          <p>Thành viên này được phân loại là Nhân viên công ty. Do đó, toàn bộ tiền sân và tiền cầu của họ đi chơi tại tất cả các buổi đều được Quỹ hỗ trợ của công ty chi trả 100%.</p>
                         <p>Tài khoản của nhân viên công ty không phát sinh nợ nần cá nhân cũng như không cần phải nạp quỹ ban đầu.</p>
                       </CardContent>
                     </Card>
@@ -944,11 +1052,11 @@ export default function Members() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {currentStats.attendedSessions
-                                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                  {currentStats.attendedSessions
+                                    .toSorted((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                                   .map(s => (
                                     <TableRow key={s.id} className="text-xs">
-	                                      <TableCell className="py-2 font-medium">{formatFullDate(s.date)}</TableCell>
+                                        <TableCell className="py-2 font-medium">{formatFullDate(s.date)}</TableCell>
                                       <TableCell className="py-2 truncate max-w-[150px]">{s.location}</TableCell>
                                       <TableCell className="py-2 text-right font-medium text-emerald-600">
                                         Đã chi trả (100% Quỹ)

@@ -25,8 +25,8 @@ export default function Settings() {
 
   const pricePerBird = CostCalculator.pricePerShuttlecock(tubePrice, perTube);
 
-  const handleSaveSettings = () => {
-    updateSettings({
+  const handleSaveSettings = async () => {
+    await updateSettings({
       monthlySupportFund: fund,
       defaultLocation: location,
       shuttlecockTubePrice: tubePrice,
@@ -56,10 +56,23 @@ export default function Settings() {
       try {
         const data = JSON.parse(event.target?.result as string);
         if (Array.isArray(data.members) && Array.isArray(data.sessions)) {
-          localStorage.setItem('badminton_members', JSON.stringify(data.members));
-          localStorage.setItem('badminton_sessions', JSON.stringify(data.sessions));
-          localStorage.setItem('badminton_transactions', JSON.stringify(Array.isArray(data.transactions) ? data.transactions : []));
-          localStorage.setItem('badminton_settings', JSON.stringify(data.settings && typeof data.settings === 'object' ? data.settings : settings));
+          const restored = {
+            version: data.version ?? '1.0.0',
+            lastUpdated: new Date().toISOString(),
+            members: data.members,
+            sessions: data.sessions,
+            transactions: Array.isArray(data.transactions) ? data.transactions : [],
+            settings: data.settings && typeof data.settings === 'object' ? data.settings : settings,
+          };
+          const response = await fetch('/api/data', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(restored),
+          });
+          if (!response.ok) {
+            setStatusMessage({ type: 'error', text: 'Không ghi được vào data/badminton-data.json. Hãy chạy app bằng npm run dev.' });
+            return;
+          }
           setStatusMessage({ type: 'success', text: 'Khôi phục thành công. Trang sẽ tải lại để áp dụng dữ liệu.' });
           window.setTimeout(() => window.location.reload(), 600);
         } else {
@@ -74,20 +87,20 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-	      <h1 className="text-3xl font-bold tracking-tight">Cài đặt</h1>
-	      {statusMessage && (
-	        <div
-	          role="status"
-	          aria-live="polite"
-	          className={`rounded-md border p-3 text-sm ${
-	            statusMessage.type === 'success'
-	              ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300'
-	              : 'border-destructive/30 bg-destructive/10 text-destructive'
-	          }`}
-	        >
-	          {statusMessage.text}
-	        </div>
-	      )}
+        <h1 className="text-3xl font-bold tracking-tight">Cài đặt</h1>
+        {statusMessage && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`rounded-md border p-3 text-sm ${
+              statusMessage.type === 'success'
+                ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300'
+                : 'border-destructive/30 bg-destructive/10 text-destructive'
+            }`}
+          >
+            {statusMessage.text}
+          </div>
+        )}
 
       <div className="grid gap-6 md:grid-cols-2">
 
@@ -100,21 +113,21 @@ export default function Settings() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="fund">Quỹ hỗ trợ mỗi tháng (₫)</Label>
-	                <CurrencyInput
-	                  id="fund"
-	                  value={fund}
-	                  onChange={setFund}
-	                  placeholder="VD: 3,000,000…"
-	                />
+                  <CurrencyInput
+                    id="fund"
+                    value={fund}
+                    onChange={setFund}
+                    placeholder="VD: 3,000,000…"
+                  />
             </div>
             <div className="space-y-2">
               <Label htmlFor="location">Địa điểm sân mặc định</Label>
-	                <Input
-	                  id="location"
-	                  name="default-location"
-	                  autoComplete="off"
-	                  value={location}
-	                  onChange={(e) => setLocation(e.target.value)}
+                  <Input
+                    id="location"
+                    name="default-location"
+                    autoComplete="off"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
               />
             </div>
           </CardContent>
@@ -136,21 +149,21 @@ export default function Settings() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="tubePrice">Giá mỗi ống cầu (₫)</Label>
-	                <CurrencyInput
-	                  id="tubePrice"
-	                  value={tubePrice}
-	                  onChange={setTubePrice}
-	                  placeholder="VD: 300,000…"
-	                />
+                  <CurrencyInput
+                    id="tubePrice"
+                    value={tubePrice}
+                    onChange={setTubePrice}
+                    placeholder="VD: 300,000…"
+                  />
             </div>
             <div className="space-y-2">
               <Label htmlFor="perTube">Số trái cầu mỗi ống</Label>
-	                <IntegerInput
-	                  id="perTube"
-	                  value={perTube}
-	                  onChange={setPerTube}
-	                  placeholder="VD: 12…"
-	                />
+                  <IntegerInput
+                    id="perTube"
+                    value={perTube}
+                    onChange={setPerTube}
+                    placeholder="VD: 12…"
+                  />
             </div>
 
             {/* Live preview */}
@@ -158,19 +171,19 @@ export default function Settings() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Giá mỗi trái cầu:</span>
                 <span className="font-semibold text-primary">
-	                  {formatVnd(pricePerBird)}
+                    {formatVnd(pricePerBird)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">3 trái/buổi:</span>
                 <span className="font-semibold">
-	                  {formatVnd(CostCalculator.shuttlecockFee(3, tubePrice, perTube))}
+                    {formatVnd(CostCalculator.shuttlecockFee(3, tubePrice, perTube))}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">5 trái/buổi:</span>
                 <span className="font-semibold">
-	                  {formatVnd(CostCalculator.shuttlecockFee(5, tubePrice, perTube))}
+                    {formatVnd(CostCalculator.shuttlecockFee(5, tubePrice, perTube))}
                 </span>
               </div>
             </div>
@@ -184,7 +197,9 @@ export default function Settings() {
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Quản lý dữ liệu</CardTitle>
-            <CardDescription>Sao lưu và khôi phục dữ liệu cục bộ.</CardDescription>
+            <CardDescription>
+              Dữ liệu chính được lưu tại <span className="font-mono">data/badminton-data.json</span>. Nút xuất file vẫn dùng để tạo bản sao lưu tải về.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-md bg-muted p-4 flex flex-col sm:flex-row gap-4">
@@ -212,38 +227,42 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground mb-4">
                 Xóa vĩnh viễn toàn bộ dữ liệu. Hành động này không thể hoàn tác. Hãy chắc chắn rằng bạn đã tải bản sao lưu về máy.
               </p>
-	              <Button variant="destructive" onClick={() => setIsDeleteOpen(true)}>
-	                Xóa toàn bộ dữ liệu
-	              </Button>
+                <Button variant="destructive" onClick={() => setIsDeleteOpen(true)}>
+                  Xóa toàn bộ dữ liệu
+                </Button>
             </div>
           </CardContent>
         </Card>
 
-	      </div>
-	      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-	        <DialogContent>
-	          <DialogHeader>
-	            <DialogTitle>Xóa toàn bộ dữ liệu?</DialogTitle>
-	            <DialogDescription>
-	              Toàn bộ thành viên, buổi đánh, giao dịch và cài đặt sẽ bị xóa vĩnh viễn. Hãy xuất bản sao lưu trước khi tiếp tục.
-	            </DialogDescription>
-	          </DialogHeader>
-	          <div className="flex justify-end gap-2">
-	            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
-	              Hủy
-	            </Button>
-	            <Button
-	              variant="destructive"
-	              onClick={() => {
-	                localStorage.clear();
-	                window.location.reload();
-	              }}
-	            >
-	              Xóa dữ liệu
-	            </Button>
-	          </div>
-	        </DialogContent>
-	      </Dialog>
-	    </div>
+        </div>
+        <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Xóa toàn bộ dữ liệu?</DialogTitle>
+              <DialogDescription>
+                Toàn bộ thành viên, buổi đánh, giao dịch và cài đặt sẽ bị xóa vĩnh viễn. Hãy xuất bản sao lưu trước khi tiếp tục.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
+                Hủy
+              </Button>
+              <Button
+                variant="destructive"
+              onClick={async () => {
+                await fetch('/api/data', { method: 'DELETE' });
+                localStorage.removeItem('badminton_members');
+                localStorage.removeItem('badminton_sessions');
+                localStorage.removeItem('badminton_transactions');
+                localStorage.removeItem('badminton_settings');
+                window.location.reload();
+              }}
+              >
+                Xóa dữ liệu
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
   );
 }

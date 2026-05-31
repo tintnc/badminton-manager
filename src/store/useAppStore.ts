@@ -1,10 +1,8 @@
 import { create } from 'zustand';
 import type { Member, Session, Transaction, AppState } from '../core/models/types';
-import { LocalRepository } from '../core/repositories/LocalRepository';
+import { DataRepository, type AppData } from '../core/repositories/DataRepository';
 
-const memberRepo = new LocalRepository<Member>('badminton_members');
-const sessionRepo = new LocalRepository<Session>('badminton_sessions');
-const transactionRepo = new LocalRepository<Transaction>('badminton_transactions');
+const dataRepo = new DataRepository();
 
 interface StoreState extends AppState {
   initialize: () => Promise<void>;
@@ -18,7 +16,7 @@ interface StoreState extends AppState {
   addTransaction: (transaction: Transaction) => Promise<void>;
   deleteTransactionsBySession: (sessionId: string) => Promise<void>;
   deleteTransactionByMemberAndSession: (memberId: string, sessionId: string) => Promise<void>;
-  updateSettings: (settings: Partial<AppState['settings']>) => void;
+  updateSettings: (settings: Partial<AppState['settings']>) => Promise<void>;
   setGlobalDate: (month: number, year: number) => void;
 }
 
@@ -31,7 +29,18 @@ const defaultSettings = {
   shuttlecocksPerTube: 12,
 };
 
-export const useAppStore = create<StoreState>((set) => ({
+function toAppData(state: StoreState): AppData {
+  return {
+    version: state.version,
+    lastUpdated: new Date().toISOString(),
+    members: state.members,
+    sessions: state.sessions,
+    transactions: state.transactions,
+    settings: state.settings,
+  };
+}
+
+export const useAppStore = create<StoreState>((set, get) => ({
   version: '1.0.0',
   lastUpdated: new Date().toISOString(),
   members: [],
@@ -42,66 +51,56 @@ export const useAppStore = create<StoreState>((set) => ({
   globalYear: new Date().getFullYear(),
 
   initialize: async () => {
-    const [members, sessions, transactions] = await Promise.all([
-      memberRepo.getAll(),
-      sessionRepo.getAll(),
-      transactionRepo.getAll(),
-    ]);
-    const settingsRaw = localStorage.getItem('badminton_settings');
-    let settings = defaultSettings;
-    if (settingsRaw) {
-      try {
-        const parsed = JSON.parse(settingsRaw);
-        if (parsed && typeof parsed === 'object') {
-          settings = { ...defaultSettings, ...parsed };
-        }
-      } catch {
-        settings = defaultSettings;
-      }
-    }
-    set({ members, sessions, transactions, settings });
+    const data = await dataRepo.load();
+    set({
+      version: data.version,
+      lastUpdated: data.lastUpdated,
+      members: data.members,
+      sessions: data.sessions,
+      transactions: data.transactions,
+      settings: { ...defaultSettings, ...data.settings },
+    });
   },
 
   addMember: async (member: Member) => {
-    await memberRepo.save(member);
     set((state: StoreState) => ({ members: [...state.members, member] }));
+    await dataRepo.save(toAppData(get()));
   },
 
   updateMember: async (member: Member) => {
-    await memberRepo.save(member);
     set((state: StoreState) => ({
       members: state.members.map((m: Member) => (m.id === member.id ? member : m)),
     }));
+    await dataRepo.save(toAppData(get()));
   },
 
   deleteMember: async (id: string) => {
-    await memberRepo.delete(id);
     set((state: StoreState) => ({
       members: state.members.filter((m: Member) => m.id !== id),
     }));
+    await dataRepo.save(toAppData(get()));
   },
 
   addSession: async (session: Session) => {
-    await sessionRepo.save(session);
     set((state: StoreState) => ({ sessions: [...state.sessions, session] }));
+    await dataRepo.save(toAppData(get()));
   },
 
   updateSession: async (session: Session) => {
-    await sessionRepo.save(session);
     set((state: StoreState) => ({
       sessions: state.sessions.map((s: Session) => (s.id === session.id ? session : s)),
     }));
+    await dataRepo.save(toAppData(get()));
   },
 
   deleteSession: async (id: string) => {
-    await sessionRepo.delete(id);
     set((state: StoreState) => ({
       sessions: state.sessions.filter((s: Session) => s.id !== id),
     }));
+    await dataRepo.save(toAppData(get()));
   },
 
   saveSessions: async (sessions: Session[]) => {
-    await sessionRepo.saveAll(sessions);
     set((state: StoreState) => {
       const newSessions = [...state.sessions];
       sessions.forEach((newS: Session) => {
@@ -111,33 +110,34 @@ export const useAppStore = create<StoreState>((set) => ({
       });
       return { sessions: newSessions };
     });
+    await dataRepo.save(toAppData(get()));
   },
 
   addTransaction: async (transaction: Transaction) => {
-    await transactionRepo.save(transaction);
     set((state: StoreState) => ({ transactions: [...state.transactions, transaction] }));
+    await dataRepo.save(toAppData(get()));
   },
 
   deleteTransactionsBySession: async (sessionId: string) => {
-    const all = await transactionRepo.getAll();
-    const filtered = all.filter(t => t.relatedSessionId !== sessionId);
-    await transactionRepo.saveAll(filtered);
-    set({ transactions: filtered });
+    set((state: StoreState) => ({
+      transactions: state.transactions.filter(t => t.relatedSessionId !== sessionId),
+    }));
+    await dataRepo.save(toAppData(get()));
   },
 
   deleteTransactionByMemberAndSession: async (memberId: string, sessionId: string) => {
-    const all = await transactionRepo.getAll();
-    const filtered = all.filter(t => !(t.relatedMemberId === memberId && t.relatedSessionId === sessionId));
-    await transactionRepo.saveAll(filtered);
-    set({ transactions: filtered });
+    set((state: StoreState) => ({
+      transactions: state.transactions.filter(t => !(t.relatedMemberId === memberId && t.relatedSessionId === sessionId)),
+    }));
+    await dataRepo.save(toAppData(get()));
   },
 
-  updateSettings: (newSettings: Partial<AppState['settings']>) => {
+  updateSettings: async (newSettings: Partial<AppState['settings']>) => {
     set((state: StoreState) => {
       const updated = { ...state.settings, ...newSettings };
-      localStorage.setItem('badminton_settings', JSON.stringify(updated));
       return { settings: updated };
     });
+    await dataRepo.save(toAppData(get()));
   },
 
   setGlobalDate: (month: number, year: number) => {

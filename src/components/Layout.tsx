@@ -1,23 +1,54 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CalendarDays, Users, Wallet, Settings, Menu, Swords } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { LayoutDashboard, CalendarDays, Users, Wallet, Settings, Menu, Swords, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 
 const months = [
   'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
   'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
 ];
-const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
+  const monthPickerRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const { initialize, globalMonth, globalYear, setGlobalDate } = useAppStore();
 
   useEffect(() => {
     void initialize();
   }, [initialize]);
+
+  useEffect(() => {
+    if (!monthPickerOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!monthPickerRef.current?.contains(event.target as Node)) {
+        setMonthPickerOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMonthPickerOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [monthPickerOpen]);
+
+  const shiftMonth = (offset: number) => {
+    const next = new Date(globalYear, globalMonth + offset, 1);
+    setGlobalDate(next.getMonth(), next.getFullYear());
+    setPickerYear(next.getFullYear());
+  };
 
   const navItems = [
     { name: 'Tổng quan', path: '/', icon: LayoutDashboard },
@@ -88,24 +119,91 @@ export default function Layout() {
             <span className="text-lg font-bold lg:hidden">BaddyClub</span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground hidden sm:inline-block">Dữ liệu tháng:</span>
-            <select
+          <div ref={monthPickerRef} className="relative flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="Xem tháng trước"
+              onClick={() => shiftMonth(-1)}
+              className="hidden sm:inline-flex size-8 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            </button>
+
+            <button
+              type="button"
               aria-label="Chọn tháng dữ liệu"
-              className="flex h-9 items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
-              value={globalMonth}
-              onChange={(e) => setGlobalDate(Number(e.target.value), globalYear)}
+              aria-expanded={monthPickerOpen}
+              onClick={() => {
+                setPickerYear(globalYear);
+                setMonthPickerOpen((open) => !open);
+              }}
+              className="inline-flex h-10 min-w-[176px] items-center justify-between gap-3 rounded-lg border border-input bg-background px-3 text-left text-sm shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              {months.map((m, i) => <option key={m} value={i}>{m}</option>)}
-            </select>
-            <select
-              aria-label="Chọn năm dữ liệu"
-              className="flex h-9 items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
-              value={globalYear}
-              onChange={(e) => setGlobalDate(globalMonth, Number(e.target.value))}
+              <span className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-primary" aria-hidden="true" />
+                <span>
+                  <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">Dữ liệu</span>
+                  <span className="font-semibold">{months[globalMonth]}, {globalYear}</span>
+                </span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              aria-label="Xem tháng sau"
+              onClick={() => shiftMonth(1)}
+              className="hidden sm:inline-flex size-8 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              {years.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+
+            {monthPickerOpen && (
+              <div className="absolute right-0 top-12 z-40 w-[320px] rounded-xl border bg-popover p-3 text-popover-foreground shadow-xl">
+                <div className="mb-3 flex items-center justify-between">
+                  <button
+                    type="button"
+                    aria-label="Năm trước"
+                    onClick={() => setPickerYear((year) => year - 1)}
+                    className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <div className="text-sm font-bold">{pickerYear}</div>
+                  <button
+                    type="button"
+                    aria-label="Năm sau"
+                    onClick={() => setPickerYear((year) => year + 1)}
+                    className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {months.map((month, index) => {
+                    const isSelected = index === globalMonth && pickerYear === globalYear;
+                    return (
+                      <button
+                        key={month}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => {
+                          setGlobalDate(index, pickerYear);
+                          setMonthPickerOpen(false);
+                        }}
+                        className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          isSelected
+                            ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                            : 'border-transparent bg-muted/40 hover:border-input hover:bg-muted'
+                        }`}
+                      >
+                        {month.replace('Tháng ', 'T')}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </header>
 
