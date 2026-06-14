@@ -6,6 +6,8 @@ services:
     image: badminton-manager:latest
     ports:
       - "5173:5173"
+    volumes:
+      - ./data/badminton-data.json:/app/data/badminton-data.json:rw
     environment:
       - PORT=5173
     restart: unless-stopped
