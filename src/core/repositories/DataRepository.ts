@@ -1,4 +1,4 @@
-import type { AppState, Member, Session, Transaction } from '../models/types';
+import type { AppState, Member, Session, ShuttlecockBatch, Transaction } from '../models/types';
 
 export interface AppData {
   version: string;
@@ -6,6 +6,7 @@ export interface AppData {
   members: Member[];
   sessions: Session[];
   transactions: Transaction[];
+  shuttlecockBatches: ShuttlecockBatch[];
   settings: AppState['settings'];
 }
 
@@ -24,8 +25,26 @@ const emptyData = (): AppData => ({
   members: [],
   sessions: [],
   transactions: [],
+  shuttlecockBatches: [],
   settings: { ...defaultSettings },
 });
+
+function normalizeShuttlecockBatch(batch: ShuttlecockBatch): ShuttlecockBatch {
+  const totalShuttlecocks = batch.totalShuttlecocks || (batch.tubes || 0) * (batch.shuttlecocksPerTube || 0);
+  const totalCost = batch.totalCost || 0;
+  return {
+    ...batch,
+    tubes: batch.tubes || 0,
+    shuttlecocksPerTube: batch.shuttlecocksPerTube || 0,
+    totalShuttlecocks,
+    remainingShuttlecocks: Math.min(
+      totalShuttlecocks,
+      Math.max(0, batch.remainingShuttlecocks ?? totalShuttlecocks)
+    ),
+    totalCost,
+    unitCost: batch.unitCost || (totalShuttlecocks > 0 ? totalCost / totalShuttlecocks : 0),
+  };
+}
 
 function normalizeData(data: Partial<AppData> | null | undefined): AppData {
   return {
@@ -34,6 +53,9 @@ function normalizeData(data: Partial<AppData> | null | undefined): AppData {
     members: Array.isArray(data?.members) ? data.members : [],
     sessions: Array.isArray(data?.sessions) ? data.sessions : [],
     transactions: Array.isArray(data?.transactions) ? data.transactions : [],
+    shuttlecockBatches: Array.isArray(data?.shuttlecockBatches)
+      ? data.shuttlecockBatches.map(normalizeShuttlecockBatch)
+      : [],
     settings: { ...defaultSettings, ...(data?.settings ?? {}) },
   };
 }

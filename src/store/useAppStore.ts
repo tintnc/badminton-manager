@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Member, Session, Transaction, AppState } from '../core/models/types';
+import type { Member, Session, ShuttlecockBatch, Transaction, AppState } from '../core/models/types';
 import { DataRepository, type AppData } from '../core/repositories/DataRepository';
 
 const dataRepo = new DataRepository();
@@ -13,7 +13,12 @@ interface StoreState extends AppState {
   updateSession: (session: Session) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   saveSessions: (sessions: Session[]) => Promise<void>;
+  addShuttlecockBatch: (batch: ShuttlecockBatch) => Promise<void>;
+  updateShuttlecockBatch: (batch: ShuttlecockBatch) => Promise<void>;
+  deleteShuttlecockBatch: (id: string) => Promise<void>;
+  saveShuttlecockBatches: (batches: ShuttlecockBatch[]) => Promise<void>;
   addTransaction: (transaction: Transaction) => Promise<void>;
+  saveTransactions: (transactions: Transaction[]) => Promise<void>;
   deleteTransactionsBySession: (sessionId: string) => Promise<void>;
   deleteTransactionByMemberAndSession: (memberId: string, sessionId: string) => Promise<void>;
   updateSettings: (settings: Partial<AppState['settings']>) => Promise<void>;
@@ -36,6 +41,7 @@ function toAppData(state: StoreState): AppData {
     members: state.members,
     sessions: state.sessions,
     transactions: state.transactions,
+    shuttlecockBatches: state.shuttlecockBatches,
     settings: state.settings,
   };
 }
@@ -46,6 +52,7 @@ export const useAppStore = create<StoreState>((set, get) => ({
   members: [],
   sessions: [],
   transactions: [],
+  shuttlecockBatches: [],
   settings: { ...defaultSettings },
   globalMonth: new Date().getMonth(),
   globalYear: new Date().getFullYear(),
@@ -58,6 +65,7 @@ export const useAppStore = create<StoreState>((set, get) => ({
       members: data.members,
       sessions: data.sessions,
       transactions: data.transactions,
+      shuttlecockBatches: data.shuttlecockBatches,
       settings: { ...defaultSettings, ...data.settings },
     });
   },
@@ -113,8 +121,37 @@ export const useAppStore = create<StoreState>((set, get) => ({
     await dataRepo.save(toAppData(get()));
   },
 
+  addShuttlecockBatch: async (batch: ShuttlecockBatch) => {
+    set((state: StoreState) => ({ shuttlecockBatches: [...state.shuttlecockBatches, batch] }));
+    await dataRepo.save(toAppData(get()));
+  },
+
+  updateShuttlecockBatch: async (batch: ShuttlecockBatch) => {
+    set((state: StoreState) => ({
+      shuttlecockBatches: state.shuttlecockBatches.map((item) => (item.id === batch.id ? batch : item)),
+    }));
+    await dataRepo.save(toAppData(get()));
+  },
+
+  deleteShuttlecockBatch: async (id: string) => {
+    set((state: StoreState) => ({
+      shuttlecockBatches: state.shuttlecockBatches.filter((batch) => batch.id !== id),
+    }));
+    await dataRepo.save(toAppData(get()));
+  },
+
+  saveShuttlecockBatches: async (batches: ShuttlecockBatch[]) => {
+    set({ shuttlecockBatches: batches });
+    await dataRepo.save(toAppData(get()));
+  },
+
   addTransaction: async (transaction: Transaction) => {
     set((state: StoreState) => ({ transactions: [...state.transactions, transaction] }));
+    await dataRepo.save(toAppData(get()));
+  },
+
+  saveTransactions: async (transactions: Transaction[]) => {
+    set({ transactions });
     await dataRepo.save(toAppData(get()));
   },
 

@@ -132,7 +132,7 @@ export default function Dashboard() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         {/* Tần suất tham gia chi tiết */}
-        <Card className="col-span-4 flex flex-col">
+        <Card className="flex flex-col lg:col-span-4">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-bold">Tần suất tham gia chi tiết (Tháng này)</CardTitle>
           </CardHeader>
@@ -145,8 +145,8 @@ export default function Dashboard() {
               <div className="space-y-4">
                 {memberAttendanceStats.map(({ member, count, percent }) => (
                   <div key={member.id} className="space-y-1.5">
-                    <div className="flex justify-between items-center text-sm gap-2">
-                      <span className="font-semibold text-foreground truncate">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="min-w-0 truncate font-semibold text-foreground">
                         {member.name} {member.nickname && <span className="text-muted-foreground font-normal text-xs ml-1">({member.nickname})</span>}
                       </span>
                       <span className="text-xs font-mono font-bold text-muted-foreground shrink-0">
@@ -155,7 +155,7 @@ export default function Dashboard() {
                     </div>
                     <div className="h-3 w-full bg-muted rounded-full overflow-hidden shadow-inner">
                       <div 
-                        className={`h-full rounded-full transition-all duration-500 ease-out shadow-sm ${getProgressBarColor(percent)}`}
+                        className={`h-full rounded-full shadow-sm transition-[width] duration-500 ease-out ${getProgressBarColor(percent)}`}
                         style={{ width: `${percent}%` }}
                       />
                     </div>
@@ -167,7 +167,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Bảng xếp hạng tham gia */}
-        <Card className="col-span-3 flex flex-col">
+        <Card className="flex flex-col lg:col-span-3">
           <CardHeader className="pb-3">
             <CardTitle>Top 5 tham gia nhiều nhất</CardTitle>
           </CardHeader>

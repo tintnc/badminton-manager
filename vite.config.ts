@@ -12,6 +12,7 @@ function emptyData() {
     members: [],
     sessions: [],
     transactions: [],
+    shuttlecockBatches: [],
     settings: {
       monthlySupportFund: 3000000,
       defaultLocation: "Sân cầu lông C30",

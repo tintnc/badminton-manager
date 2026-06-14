@@ -23,6 +23,7 @@ export interface Session {
   courtFee: number;
   shuttlecocksUsed: number; // Number of shuttlecocks used this session
   shuttlecockFee: number;   // Calculated: shuttlecocksUsed * pricePerShuttlecock
+  shuttlecockUsages?: ShuttlecockBatchUsage[]; // Inventory lots consumed for this session
   fundSubsidyUsed: number; // Amount of support fund used for this session
   totalCost: number;
   attendeeIds: string[]; // Array of Member IDs
@@ -36,11 +37,31 @@ export interface Transaction {
   id: string; // UUID
   date: string; // ISO Date
   type: 'income' | 'expense';
-  category: 'support_fund' | 'member_payment' | 'court_fee' | 'shuttlecock_fee' | 'other';
+  category: 'support_fund' | 'member_payment' | 'court_fee' | 'shuttlecock_fee' | 'shuttlecock_purchase' | 'other';
   amount: number;
   description: string;
   relatedMemberId?: string;
   relatedSessionId?: string;
+  relatedShuttlecockBatchId?: string;
+}
+
+export interface ShuttlecockBatch {
+  id: string; // UUID
+  purchaseDate: string; // ISO Date
+  tubes: number;
+  shuttlecocksPerTube: number;
+  totalShuttlecocks: number;
+  remainingShuttlecocks: number;
+  totalCost: number;
+  unitCost: number;
+  notes?: string;
+}
+
+export interface ShuttlecockBatchUsage {
+  batchId: string;
+  quantity: number;
+  unitCost: number;
+  amount: number;
 }
 
 export interface AppState {
@@ -49,6 +70,7 @@ export interface AppState {
   members: Member[];
   sessions: Session[];
   transactions: Transaction[];
+  shuttlecockBatches: ShuttlecockBatch[];
   settings: {
     monthlySupportFund: number; // Default 3000000
     defaultLocation: string;

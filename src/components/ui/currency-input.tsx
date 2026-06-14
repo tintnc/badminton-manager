@@ -13,12 +13,14 @@ export function CurrencyInput({
   value,
   onChange,
   placeholder = '0',
+  disabled = false,
 }: {
   id?: string;
   name?: string;
   value: number;
   onChange: (val: number) => void;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const [isFocused, setIsFocused] = useState(false);
   const [draftValue, setDraftValue] = useState('');
@@ -49,6 +51,7 @@ export function CurrencyInput({
       autoComplete="off"
       value={isFocused ? draftValue : formatInputNumber(value)}
       placeholder={placeholder}
+      disabled={disabled}
       onFocus={handleFocus}
       onChange={handleChange}
       onBlur={handleBlur}
@@ -64,6 +67,7 @@ export function IntegerInput({
   onChange,
   min = 0,
   placeholder = '0',
+  disabled = false,
 }: {
   id?: string;
   name?: string;
@@ -71,6 +75,7 @@ export function IntegerInput({
   onChange: (val: number) => void;
   min?: number;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const [isFocused, setIsFocused] = useState(false);
   const [draftValue, setDraftValue] = useState('');
@@ -100,6 +105,7 @@ export function IntegerInput({
       autoComplete="off"
       value={isFocused ? draftValue : (value === 0 ? '' : String(value))}
       placeholder={placeholder}
+      disabled={disabled}
       onFocus={handleFocus}
       onChange={handleChange}
       onBlur={handleBlur}

@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Members = lazy(() => import('./pages/Members'));
 const Sessions = lazy(() => import('./pages/Sessions'));
+const Shuttlecocks = lazy(() => import('./pages/Shuttlecocks'));
 const Finance = lazy(() => import('./pages/Finance'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Pairing = lazy(() => import('./pages/Pairing'));
@@ -17,6 +18,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="sessions" element={<Sessions />} />
+            <Route path="shuttlecocks" element={<Shuttlecocks />} />
             <Route path="pairing" element={<Pairing />} />
             <Route path="members" element={<Members />} />
             <Route path="finance" element={<Finance />} />

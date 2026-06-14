@@ -14,7 +14,7 @@ import { CurrencyInput, IntegerInput } from '../components/ui/currency-input';
 
 export default function Settings() {
   const store = useAppStore();
-  const { settings, updateSettings, members, sessions, transactions } = store;
+  const { settings, updateSettings, members, sessions, transactions, shuttlecockBatches } = store;
 
   const [fund, setFund] = useState(settings.monthlySupportFund);
   const [location, setLocation] = useState(settings.defaultLocation);
@@ -42,6 +42,7 @@ export default function Settings() {
       members,
       sessions,
       transactions,
+      shuttlecockBatches,
       settings,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -62,6 +63,7 @@ export default function Settings() {
             members: data.members,
             sessions: data.sessions,
             transactions: Array.isArray(data.transactions) ? data.transactions : [],
+            shuttlecockBatches: Array.isArray(data.shuttlecockBatches) ? data.shuttlecockBatches : [],
             settings: data.settings && typeof data.settings === 'object' ? data.settings : settings,
           };
           const response = await fetch('/api/data', {
@@ -140,15 +142,15 @@ export default function Settings() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5" /> Giá cầu lông
+              <ShoppingCart className="h-5 w-5" /> Giá cầu mặc định
             </CardTitle>
             <CardDescription>
-              Cài đặt giá ống cầu để tính chi phí mỗi trái cầu. Hệ thống sẽ tự tính tiền cầu mỗi buổi.
+              Giá gợi ý khi nhập lô cầu mới. Tiền cầu mỗi buổi sẽ lấy theo tồn kho FIFO trong trang Kho cầu.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="tubePrice">Giá mỗi ống cầu (₫)</Label>
+              <Label htmlFor="tubePrice">Giá gợi ý mỗi ống cầu (₫)</Label>
                   <CurrencyInput
                     id="tubePrice"
                     value={tubePrice}
@@ -169,7 +171,7 @@ export default function Settings() {
             {/* Live preview */}
             <div className="rounded-md bg-primary/5 border border-primary/20 p-4 space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Giá mỗi trái cầu:</span>
+                <span className="text-muted-foreground">Giá gợi ý mỗi trái:</span>
                 <span className="font-semibold text-primary">
                     {formatVnd(pricePerBird)}
                 </span>

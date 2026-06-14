@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import type { Session } from '../core/models/types';
+import type { Member, Session } from '../core/models/types';
 import { ScheduleGenerator } from '../core/services/ScheduleGenerator';
 import { CostCalculator } from '../core/services/CostCalculator';
+import { ShuttlecockInventoryService } from '../core/services/ShuttlecockInventoryService';
 import { Calendar, Users as UsersIcon, CheckCircle2, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -23,6 +24,8 @@ export default function Sessions() {
     addTransaction, 
     deleteTransactionsBySession, 
     updateMember,
+    shuttlecockBatches,
+    saveShuttlecockBatches,
     globalMonth,
     globalYear 
   } = useAppStore();
@@ -33,6 +36,7 @@ export default function Sessions() {
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
   const [isGenerateConfirmOpen, setIsGenerateConfirmOpen] = useState(false);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
+  const [attendanceError, setAttendanceError] = useState('');
 
   function MemberTypeBadge({ type }: { type?: 'employee' | 'guest' | 'regular' }) {
     const t = type || 'regular';
@@ -86,6 +90,7 @@ export default function Sessions() {
     // Ensure legacy sessions have shuttlecocksUsed (default to 0 if missing)
     const s: Session = { ...session, shuttlecocksUsed: session.shuttlecocksUsed ?? 0 };
     setActiveSession(s);
+    setAttendanceError('');
     setIsAttendanceOpen(true);
   };
 
@@ -108,17 +113,21 @@ export default function Sessions() {
     return Math.max(0, settings.monthlySupportFund - usedThisMonth);
   };
 
+  const getShuttlecockPreview = (session: Session) => {
+    const oldSession = sessions.find(s => s.id === session.id);
+    const restoredBatches = oldSession?.status === 'completed'
+      ? ShuttlecockInventoryService.restoreUsage(shuttlecockBatches, oldSession.shuttlecockUsages)
+      : shuttlecockBatches;
+    return ShuttlecockInventoryService.consumeFIFO(restoredBatches, session.shuttlecocksUsed);
+  };
+
   // Live calculation based on current session state
   const getCalcDetailed = (session: Session) => {
-    const shuttlecockFee = CostCalculator.shuttlecockFee(
-      session.shuttlecocksUsed,
-      settings.shuttlecockTubePrice,
-      settings.shuttlecocksPerTube
-    );
+    const shuttlecockPreview = getShuttlecockPreview(session);
     const attendees = members.filter(m => session.attendeeIds.includes(m.id));
     return CostCalculator.calculateDetailedSessionCost(
       session.courtFee,
-      shuttlecockFee,
+      shuttlecockPreview.totalCost,
       attendees,
       session.guestCount
     );
@@ -126,32 +135,35 @@ export default function Sessions() {
 
   const saveAttendance = async () => {
     if (!activeSession) return;
-    const shuttlecockFee = CostCalculator.shuttlecockFee(
-      activeSession.shuttlecocksUsed,
-      settings.shuttlecockTubePrice,
-      settings.shuttlecocksPerTube
-    );
+    const shuttlecockPreview = getShuttlecockPreview(activeSession);
+
+    if (!shuttlecockPreview.isEnough) {
+      setAttendanceError(`Kho cầu chỉ còn ${shuttlecockPreview.available} trái. Hãy nhập thêm cầu trước khi lưu buổi này.`);
+      return;
+    }
+
+    const shuttlecockFee = shuttlecockPreview.totalCost;
 
     // 1. REVERT TIỀN/NỢ CỦA BUỔI ĐÁNH CŨ (NẾU ĐÃ HOÀN THÀNH TRƯỚC ĐÓ)
     const oldSession = sessions.find(s => s.id === activeSession.id);
+    const memberUpdates = new Map<string, Member>(members.map(member => [member.id, { ...member }]));
+
     if (oldSession && oldSession.status === 'completed') {
       // Revert cho từng thành viên tham gia buổi cũ
       for (const oldAttendeeId of oldSession.attendeeIds) {
-        const member = members.find(m => m.id === oldAttendeeId);
+        const member = memberUpdates.get(oldAttendeeId);
         if (member) {
           const type = member.membershipType || 'regular';
           if (type === 'regular') {
-            const updatedMember = {
+            memberUpdates.set(oldAttendeeId, {
               ...member,
               prepaidBalance: (member.prepaidBalance || 0) + oldSession.costPerPerson,
-            };
-            await updateMember(updatedMember);
+            });
           } else if (type === 'guest') {
-            const updatedMember = {
+            memberUpdates.set(oldAttendeeId, {
               ...member,
               debt: Math.max(0, (member.debt || 0) - 35000),
-            };
-            await updateMember(updatedMember);
+            });
           }
         }
       }
@@ -181,25 +193,41 @@ export default function Sessions() {
     // 3. ÁP DỤNG CHI PHÍ MỚI VÀO VÍ CỦA TỪNG THÀNH VIÊN
     for (const attendee of attendees) {
       const type = attendee.membershipType || 'regular';
+      const member = memberUpdates.get(attendee.id) ?? attendee;
       if (type === 'regular') {
-        const updatedMember = {
-          ...attendee,
-          prepaidBalance: (attendee.prepaidBalance || 0) - costPerPerson,
-        };
-        await updateMember(updatedMember);
+        memberUpdates.set(attendee.id, {
+          ...member,
+          prepaidBalance: (member.prepaidBalance || 0) - costPerPerson,
+        });
       } else if (type === 'guest') {
-        const updatedMember = {
-          ...attendee,
-          debt: (attendee.debt || 0) + 35000,
-        };
+        memberUpdates.set(attendee.id, {
+          ...member,
+          debt: (member.debt || 0) + 35000,
+        });
+      }
+    }
+
+    for (const updatedMember of memberUpdates.values()) {
+      const original = members.find(member => member.id === updatedMember.id);
+      if (
+        original
+        && (
+          original.prepaidBalance !== updatedMember.prepaidBalance
+          || original.debt !== updatedMember.debt
+          || original.paidSessionIds !== updatedMember.paidSessionIds
+        )
+      ) {
         await updateMember(updatedMember);
       }
     }
+
+    await saveShuttlecockBatches(shuttlecockPreview.batches);
 
     // 4. LƯU THÔNG TIN BUỔI ĐÁNH
     const updatedSession: Session = {
       ...activeSession,
       shuttlecockFee,
+      shuttlecockUsages: shuttlecockPreview.usages,
       totalCost,
       fundSubsidyUsed: subsidyUsed,
       costPerPerson,
@@ -233,7 +261,7 @@ export default function Sessions() {
         type: 'expense',
         category: 'shuttlecock_fee',
         amount: shuttlecockFee,
-        description: `Tiền cầu buổi ${dateLabel} (${activeSession.shuttlecocksUsed} trái)`,
+        description: `Tiền cầu buổi ${dateLabel} (${activeSession.shuttlecocksUsed} trái từ kho)`,
         relatedSessionId: activeSession.id,
       });
     }
@@ -266,12 +294,6 @@ export default function Sessions() {
 
     setIsAttendanceOpen(false);
   };
-
-  const pricePerBird = CostCalculator.pricePerShuttlecock(
-    settings.shuttlecockTubePrice,
-    settings.shuttlecocksPerTube
-  );
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -293,8 +315,8 @@ export default function Sessions() {
           filteredSessions.map(session => (
             <Card key={session.id} className={session.status === 'completed' ? 'border-primary/50 bg-primary/5' : ''}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex justify-between items-center">
-                  <span>{formatFullDate(session.date)}</span>
+                <CardTitle className="flex items-center justify-between gap-2 text-lg">
+                  <span className="min-w-0 truncate">{formatFullDate(session.date)}</span>
                   {session.status === 'completed' ? (
                     <CheckCircle2 className="h-5 w-5 text-primary" />
                   ) : (
@@ -303,23 +325,23 @@ export default function Sessions() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm pb-4">
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">Giờ:</span>
-                  <span>{session.startTime} - {session.endTime}</span>
+                  <span className="text-right">{session.startTime} - {session.endTime}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">Sân:</span>
-                  <span className="truncate ml-4">{session.location}</span>
+                  <span className="min-w-0 truncate text-right">{session.location}</span>
                 </div>
                 {session.status === 'completed' && (
                   <>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-3">
                       <span className="text-muted-foreground">Người tham gia:</span>
-                      <span>{session.attendeeIds.length + session.guestCount}</span>
+                      <span className="text-right">{session.attendeeIds.length + session.guestCount}</span>
                     </div>
-                    <div className="flex justify-between font-medium">
+                    <div className="flex justify-between gap-3 font-medium">
                       <span>Phí mỗi người:</span>
-                      <span>{formatVnd(session.costPerPerson)}</span>
+                      <span className="text-right">{formatVnd(session.costPerPerson)}</span>
                     </div>
                   </>
                 )}
@@ -367,19 +389,19 @@ export default function Sessions() {
 
           {activeSession && (() => {
             const calc = getCalcDetailed(activeSession);
-            const shuttlecockFee = CostCalculator.shuttlecockFee(
-              activeSession.shuttlecocksUsed,
-              settings.shuttlecockTubePrice,
-              settings.shuttlecocksPerTube
-            );
+            const shuttlecockPreview = getShuttlecockPreview(activeSession);
+            const shuttlecockFee = shuttlecockPreview.totalCost;
+            const averageShuttlecockCost = activeSession.shuttlecocksUsed > 0
+              ? shuttlecockFee / activeSession.shuttlecocksUsed
+              : 0;
             return (
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 py-4">
 
                 {/* Left: Attendees */}
                 <div className="lg:col-span-3 space-y-4">
-                  <h3 className="font-semibold text-lg flex justify-between items-center">
-                    Chọn người tham gia
-                    <span className="text-sm font-normal text-muted-foreground">
+                  <h3 className="flex items-center justify-between gap-2 text-lg font-semibold">
+                    <span>Chọn người tham gia</span>
+                    <span className="shrink-0 text-sm font-normal text-muted-foreground">
                       Đã chọn {activeSession.attendeeIds.length}
                     </span>
                   </h3>
@@ -446,66 +468,80 @@ export default function Sessions() {
                       <IntegerInput
                         id="shuttlecocksUsed"
                         value={activeSession.shuttlecocksUsed}
-                        onChange={(val) => setActiveSession({ ...activeSession, shuttlecocksUsed: val })}
+                        onChange={(val) => {
+                          setActiveSession({ ...activeSession, shuttlecocksUsed: val });
+                          setAttendanceError('');
+                        }}
                         placeholder="VD: 3…"
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Giá/trái: {formatVnd(pricePerBird)} → Tổng cầu: <span className="font-semibold text-foreground">{formatVnd(shuttlecockFee)}</span>
-                      </p>
+                      <div className="space-y-1 text-xs">
+                        <p className={shuttlecockPreview.isEnough ? 'text-muted-foreground' : 'font-medium text-destructive'}>
+                          Kho khả dụng: {shuttlecockPreview.available} trái · Còn sau lưu: {Math.max(0, shuttlecockPreview.available - activeSession.shuttlecocksUsed)} trái
+                        </p>
+                        <p className="text-muted-foreground">
+                          Giá vốn bình quân buổi này: {formatVnd(averageShuttlecockCost)} / trái → Tổng cầu: <span className="font-semibold text-foreground">{formatVnd(shuttlecockFee)}</span>
+                        </p>
+                      </div>
                     </div>
 
                     <div className="pt-4 border-t space-y-2.5 text-sm">
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-3">
                         <span className="text-muted-foreground">Tổng chi phí:</span>
-                        <span className="font-semibold text-foreground">{formatVnd(shuttlecockFee + activeSession.courtFee)}</span>
+                        <span className="text-right font-semibold text-foreground">{formatVnd(shuttlecockFee + activeSession.courtFee)}</span>
                       </div>
 
                       <div className="bg-muted/50 p-3 rounded-md space-y-2 text-xs">
-                        <div className="flex justify-between font-medium">
-                          <span>1. Khách vãng lai ({calc.guestCountTotal} người):</span>
-                          <span className="text-amber-600 font-bold">+{formatVnd(calc.guestFeeTotal)}</span>
+                        <div className="flex justify-between gap-3 font-medium">
+                          <span className="min-w-0">1. Khách vãng lai ({calc.guestCountTotal} người):</span>
+                          <span className="shrink-0 text-right font-bold text-amber-600 dark:text-amber-400">+{formatVnd(calc.guestFeeTotal)}</span>
                         </div>
-                        <div className="pl-3 text-muted-foreground flex justify-between">
+                        <div className="flex justify-between gap-3 pl-3 text-muted-foreground">
                           <span>(Mỗi người đóng cố định 35k)</span>
                         </div>
 
-                        <div className="flex justify-between font-medium border-t pt-1.5">
-                          <span>2. Thành viên thường ({calc.regularCount} người):</span>
-                          <span className="text-sky-600 dark:text-sky-400 font-bold">-{formatVnd(calc.regularCount * calc.costPerPerson)}</span>
+                        <div className="flex justify-between gap-3 border-t pt-1.5 font-medium">
+                          <span className="min-w-0">2. Thành viên thường ({calc.regularCount} người):</span>
+                          <span className="shrink-0 text-right font-bold text-sky-600 dark:text-sky-400">-{formatVnd(calc.regularCount * calc.costPerPerson)}</span>
                         </div>
-                        <div className="pl-3 text-muted-foreground flex justify-between">
-                          <span>(Tiền cầu chia đều cho {calc.employeeCount + calc.regularCount + calc.guestCountTotal} người)</span>
-                          <span className="font-medium text-foreground">{formatVnd(calc.costPerPerson)}/người</span>
+                        <div className="flex justify-between gap-3 pl-3 text-muted-foreground">
+                          <span className="min-w-0">(Tiền cầu chia đều cho {calc.employeeCount + calc.regularCount + calc.guestCountTotal} người)</span>
+                          <span className="shrink-0 text-right font-medium text-foreground">{formatVnd(calc.costPerPerson)}/người</span>
                         </div>
 
-                        <div className="flex justify-between font-medium border-t pt-1.5">
-                          <span>3. Quỹ công ty chi trả:</span>
-                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">-{formatVnd(calc.subsidyUsed)}</span>
+                        <div className="flex justify-between gap-3 border-t pt-1.5 font-medium">
+                          <span className="min-w-0">3. Quỹ công ty chi trả:</span>
+                          <span className="shrink-0 text-right font-bold text-emerald-600 dark:text-emerald-400">-{formatVnd(calc.subsidyUsed)}</span>
                         </div>
                         <div className="pl-3 text-muted-foreground">
                           <span>(Chi trả tiền sân & tiền cầu chia đều của {calc.employeeCount} nhân viên)</span>
                         </div>
                       </div>
 
-                      <div className="flex justify-between pt-1">
+                      <div className="flex justify-between gap-3 pt-1">
                         <span className="text-muted-foreground">Quỹ hỗ trợ còn lại:</span>
-                        <span className={`font-semibold ${getRemainingFund(activeSession.id) <= 0 ? 'text-destructive' : 'text-primary'}`}>
+                        <span className={`shrink-0 text-right font-semibold ${getRemainingFund(activeSession.id) <= 0 ? 'text-destructive' : 'text-primary'}`}>
                           {formatVnd(getRemainingFund(activeSession.id))}
                         </span>
                       </div>
 
                       <div className="pt-3 border-t space-y-2">
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Giá gốc chia đều (không hỗ trợ):</span>
-                          <span className="font-semibold text-foreground">{formatVnd(calc.costPerPersonNoSubsidy)}</span>
+                        <div className="flex justify-between gap-3 text-muted-foreground">
+                          <span className="min-w-0">Giá gốc chia đều (không hỗ trợ):</span>
+                          <span className="shrink-0 text-right font-semibold text-foreground">{formatVnd(calc.costPerPersonNoSubsidy)}</span>
                         </div>
-                        <div className="flex justify-between font-bold text-primary text-base">
-                          <span>Tiền cầu/Thành viên thường:</span>
-                          <span className="text-lg">{formatVnd(calc.costPerPerson)}</span>
+                        <div className="flex justify-between gap-3 text-base font-bold text-primary">
+                          <span className="min-w-0">Tiền cầu/Thành viên thường:</span>
+                          <span className="shrink-0 text-right text-lg">{formatVnd(calc.costPerPerson)}</span>
                         </div>
                       </div>
                     </div>
                   </div>
+
+                    {attendanceError && (
+                      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm font-medium text-destructive">
+                        {attendanceError}
+                      </div>
+                    )}
 
                   <Button className="w-full" size="lg" onClick={saveAttendance}>
                     Lưu buổi đánh

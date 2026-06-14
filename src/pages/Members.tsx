@@ -3,16 +3,17 @@ import { useAppStore } from '../store/useAppStore';
 import type { Member, Session } from '../core/models/types';
 import { v4 as uuidv4 } from 'uuid';
 import { CostCalculator } from '../core/services/CostCalculator';
-import { Plus, Edit2, Trash2, Star, RefreshCw, Calendar, DollarSign, Search, Users, Wallet, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Star, RefreshCw, Calendar, DollarSign, Search, Users, Wallet, AlertCircle, MinusCircle, Loader2, QrCode } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Checkbox } from '../components/ui/checkbox';
 import { CurrencyInput } from '../components/ui/currency-input';
 import { formatFullDate, formatShortDate, formatVnd } from '../lib/format';
+import { buildGuestPaymentDescription, buildSepayQrUrl, guestPaymentQrConfig } from '../lib/payment-qr';
 
 const skillLabels: Record<number, { label: string; color: string }> = {
   1: { label: 'Mới chơi', color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
@@ -120,20 +121,26 @@ export default function Members() {
     };
 
     if (type === 'regular') {
-      const deposits = transactions.filter(t => t.relatedMemberId === member.id && t.type === 'income' && t.category === 'member_payment' && isWithinRange(t.date));
+      const fundTransactions = transactions.filter(t => t.relatedMemberId === member.id && t.category === 'member_payment' && isWithinRange(t.date));
+      const deposits = fundTransactions.filter(t => t.type === 'income');
+      const fundDeductions = fundTransactions.filter(t => t.type === 'expense');
       const totalDeposited = deposits.reduce((sum, t) => sum + t.amount, 0);
+      const totalFundDeductions = fundDeductions.reduce((sum, t) => sum + t.amount, 0);
 
       const attendedSessions = sessions.filter(s => s.status === 'completed' && s.attendeeIds.includes(member.id) && isWithinRange(s.date));
       const totalPlayedCost = attendedSessions.reduce((sum, s) => sum + (s.costPerPerson || 0), 0);
 
-      const balance = totalDeposited - totalPlayedCost;
+      const balance = totalDeposited - totalFundDeductions - totalPlayedCost;
       return {
         balance: balance > 0 ? balance : 0,
         debt: balance < 0 ? -balance : 0,
         rawBalance: balance,
         totalDeposited,
+        totalFundDeductions,
         totalPlayedCost,
         deposits,
+        fundDeductions,
+        fundTransactions,
         attendedSessions
       };
     }
@@ -150,13 +157,16 @@ export default function Members() {
         debt: Math.max(0, totalDebtIncurred - totalPaid),
         rawBalance: totalPaid - totalDebtIncurred,
         totalDeposited: totalPaid,
+        totalFundDeductions: 0,
         totalPlayedCost: totalDebtIncurred,
         deposits,
+        fundDeductions: [],
+        fundTransactions: deposits,
         attendedSessions
       };
     }
 
-    return { balance: 0, debt: 0, rawBalance: 0, totalDeposited: 0, totalPlayedCost: 0, deposits: [], attendedSessions: [] };
+    return { balance: 0, debt: 0, rawBalance: 0, totalDeposited: 0, totalFundDeductions: 0, totalPlayedCost: 0, deposits: [], fundDeductions: [], fundTransactions: [], attendedSessions: [] };
   };
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -168,6 +178,11 @@ export default function Members() {
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'regular' | 'employee' | 'guest'>('all');
+  const [fundAdjustmentMode, setFundAdjustmentMode] = useState<'add' | 'subtract'>('add');
+  const [fundAdjustmentAmount, setFundAdjustmentAmount] = useState(0);
+  const [fundAdjustmentReason, setFundAdjustmentReason] = useState('');
+  const [fundAdjustmentError, setFundAdjustmentError] = useState('');
+  const [isApplyingFundAdjustment, setIsApplyingFundAdjustment] = useState(false);
 
   const memberRows = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -213,11 +228,13 @@ export default function Members() {
       const s = newSessions[i];
       if (s.status === 'completed') {
         const attendees = members.filter(m => s.attendeeIds.includes(m.id));
-        const shuttlecockFee = CostCalculator.shuttlecockFee(
-          s.shuttlecocksUsed || 0,
-          settings.shuttlecockTubePrice,
-          settings.shuttlecocksPerTube
-        );
+        const shuttlecockFee = s.shuttlecockUsages?.length
+          ? s.shuttlecockUsages.reduce((sum, usage) => sum + usage.amount, 0)
+          : (s.shuttlecockFee || CostCalculator.shuttlecockFee(
+              s.shuttlecocksUsed || 0,
+              settings.shuttlecockTubePrice,
+              settings.shuttlecocksPerTube
+            ));
         const breakdown = CostCalculator.calculateDetailedSessionCost(
           s.courtFee || 0,
           shuttlecockFee,
@@ -253,12 +270,15 @@ export default function Members() {
         const totalDeposited = transactions
           .filter(t => t.relatedMemberId === member.id && t.type === 'income' && t.category === 'member_payment')
           .reduce((sum, t) => sum + t.amount, 0);
+        const totalFundDeductions = transactions
+          .filter(t => t.relatedMemberId === member.id && t.type === 'expense' && t.category === 'member_payment')
+          .reduce((sum, t) => sum + t.amount, 0);
 
         const totalPlayedCost = completedSessionsForSync
           .filter(s => s.attendeeIds.includes(member.id))
           .reduce((sum, s) => sum + (s.costPerPerson || 0), 0);
 
-        const newBalance = totalDeposited - totalPlayedCost;
+        const newBalance = totalDeposited - totalFundDeductions - totalPlayedCost;
         let newPrepaidBalance = 0;
         let newDebt = 0;
         if (newBalance < 0) {
@@ -333,19 +353,6 @@ export default function Members() {
     const debt = membershipType === 'employee' ? 0 : (formData.debt ?? 0);
 
     if (editingMember) {
-      const oldBalance = editingMember.prepaidBalance || 0;
-      if (membershipType === 'regular' && prepaidBalance > oldBalance) {
-        const depositAmount = prepaidBalance - oldBalance;
-        await addTransaction({
-          id: crypto.randomUUID(),
-          date: new Date().toISOString(),
-          type: 'income',
-          category: 'member_payment',
-          amount: depositAmount,
-          description: `Thành viên ${formData.name} nạp quỹ (+${formatVnd(depositAmount)})`,
-          relatedMemberId: editingMember.id,
-        });
-      }
       await updateMember({ 
         ...editingMember, 
         ...formData, 
@@ -387,7 +394,70 @@ export default function Members() {
 
   const openAuditDialog = (member: Member) => {
     setSelectedAuditMember(member);
+    setFundAdjustmentMode('add');
+    setFundAdjustmentAmount(0);
+    setFundAdjustmentReason('');
+    setFundAdjustmentError('');
+    setIsApplyingFundAdjustment(false);
     setIsAuditOpen(true);
+  };
+
+  const syncSelectedRegularMemberBalance = async (member: Member, nextTransactions = transactions) => {
+    const totalDeposited = nextTransactions
+      .filter(t => t.relatedMemberId === member.id && t.type === 'income' && t.category === 'member_payment')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const totalFundDeductions = nextTransactions
+      .filter(t => t.relatedMemberId === member.id && t.type === 'expense' && t.category === 'member_payment')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const totalPlayedCost = sessions
+      .filter(s => s.status === 'completed' && s.attendeeIds.includes(member.id))
+      .reduce((sum, s) => sum + (s.costPerPerson || 0), 0);
+    const rawBalance = totalDeposited - totalFundDeductions - totalPlayedCost;
+    const updatedMember = {
+      ...member,
+      prepaidBalance: rawBalance > 0 ? rawBalance : 0,
+      debt: rawBalance < 0 ? -rawBalance : 0,
+    };
+
+    await updateMember(updatedMember);
+    setSelectedAuditMember(updatedMember);
+  };
+
+  const handleApplyFundAdjustment = async (member: Member) => {
+    if (isApplyingFundAdjustment) return;
+
+    const reason = fundAdjustmentReason.trim();
+
+    if (fundAdjustmentAmount <= 0) {
+      setFundAdjustmentError('Nhập số tiền cần điều chỉnh.');
+      return;
+    }
+
+    if (!reason) {
+      setFundAdjustmentError('Nhập lý do điều chỉnh quỹ.');
+      return;
+    }
+
+    const transaction = {
+      id: crypto.randomUUID(),
+      date: new Date().toISOString(),
+      type: fundAdjustmentMode === 'add' ? 'income' as const : 'expense' as const,
+      category: 'member_payment' as const,
+      amount: fundAdjustmentAmount,
+      description: `${fundAdjustmentMode === 'add' ? 'Nạp thêm quỹ' : 'Trừ quỹ'}: ${reason}`,
+      relatedMemberId: member.id,
+    };
+
+    setIsApplyingFundAdjustment(true);
+    try {
+      await addTransaction(transaction);
+      await syncSelectedRegularMemberBalance(member, [...transactions, transaction]);
+      setFundAdjustmentAmount(0);
+      setFundAdjustmentReason('');
+      setFundAdjustmentError('');
+    } finally {
+      setIsApplyingFundAdjustment(false);
+    }
   };
 
   const handleToggleGuestSessionPayment = async (member: Member, session: Session, isPaid: boolean) => {
@@ -431,30 +501,29 @@ export default function Members() {
   return (
     <div className="space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
+          <div className="min-w-0">
             <h1 className="text-3xl font-bold tracking-tight text-pretty">Thành viên</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Quản lý danh sách chơi, trình độ và quỹ nạp trước.
             </p>
           </div>
           
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center lg:justify-end">
           <Button 
             variant="outline" 
-            size="sm" 
             onClick={syncAllFinance} 
             disabled={isSyncing}
-            className="flex items-center gap-1.5"
+            className="w-full sm:w-auto"
           >
             <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
             <span>Đồng bộ số dư</span>
           </Button>
 
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2" onClick={openAddDialog}>
-              <Plus className="mr-2 h-4 w-4" /> Thêm thành viên
-            </DialogTrigger>
-            <DialogContent>
+            <Button type="button" onClick={openAddDialog} className="w-full sm:w-auto">
+              <Plus className="h-4 w-4" aria-hidden="true" /> Thêm thành viên
+            </Button>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>{editingMember ? 'Sửa thành viên' : 'Thêm thành viên mới'}</DialogTitle>
               </DialogHeader>
@@ -495,7 +564,7 @@ export default function Members() {
                 {/* Skill Level */}
                 <div className="space-y-2">
                   <Label>Trình độ</Label>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {[1, 2, 3, 4].map(level => {
                       const info = skillLabels[level];
                       const isSelected = formData.skillLevel === level;
@@ -526,7 +595,7 @@ export default function Members() {
                 {/* Loại thành viên */}
                 <div className="space-y-2">
                   <Label>Loại thành viên</Label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                       {([
                         { value: 'regular', label: 'Thường' },
                         { value: 'employee', label: 'Nhân viên công ty' },
@@ -558,7 +627,7 @@ export default function Members() {
                 </div>
 
                 {/* Nhập quỹ ban đầu nếu là thành viên thường */}
-                {((formData.membershipType || 'regular') === 'regular') && (
+                {!editingMember && ((formData.membershipType || 'regular') === 'regular') && (
                   <div className="space-y-2">
                     <Label htmlFor="prepaidBalance">Quỹ ban đầu nạp trước (₫)</Label>
                     <CurrencyInput 
@@ -573,8 +642,14 @@ export default function Members() {
                   </div>
                 )}
 
+                {editingMember && ((formData.membershipType || 'regular') === 'regular') && (
+                  <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                    Nạp hoặc trừ quỹ trong màn lịch sử tài chính của thành viên để lưu lý do.
+                  </div>
+                )}
+
                 {/* Nhập nợ ban đầu nếu là thành viên thường hoặc khách vãng lai */}
-                {((formData.membershipType || 'regular') !== 'employee') && (
+                {!editingMember && ((formData.membershipType || 'regular') !== 'employee') && (
                   <div className="space-y-2">
                     <Label htmlFor="debt">Nợ ban đầu (₫)</Label>
                     <CurrencyInput 
@@ -663,7 +738,7 @@ export default function Members() {
                     onChange={(event) => setSearchTerm(event.target.value)}
                   />
                 </div>
-                <div className="flex rounded-lg border bg-background p-0.5">
+                <div className="flex overflow-x-auto rounded-lg border bg-background p-0.5">
                   {([
                     { value: 'all', label: 'Tất cả' },
                     { value: 'regular', label: 'Thường' },
@@ -689,7 +764,7 @@ export default function Members() {
             </div>
           </CardHeader>
           <CardContent>
-          <Table>
+          <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Tên</TableHead>
@@ -848,21 +923,137 @@ export default function Members() {
                   
                   const balance = cumulativeStats.balance;
                   const debt = cumulativeStats.debt;
+                  const signedAdjustment = fundAdjustmentMode === 'add' ? fundAdjustmentAmount : -fundAdjustmentAmount;
+                  const previewRawBalance = cumulativeStats.rawBalance + signedAdjustment;
+                  const previewBalance = Math.max(0, previewRawBalance);
+                  const previewDebt = Math.max(0, -previewRawBalance);
                   
                   return (
                     <div className="space-y-4">
                       {/* Thống kê nhanh */}
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                           <AuditMetricCard
-                            label="Số dư quỹ tháng này"
+                            label="Số dư quỹ hiện tại"
                             value={formatVnd(balance)}
                             tone="success"
                             detail={`Mang sang: ${formatVnd(prevStats.rawBalance)}`}
                           />
-                          <AuditMetricCard label="Nợ tháng này" value={formatVnd(debt)} tone="danger" />
-                          <AuditMetricCard label="Đã nạp trong tháng" value={formatVnd(currentStats.totalDeposited)} tone="info" />
+                          <AuditMetricCard label="Nợ hiện tại" value={formatVnd(debt)} tone="danger" />
+                          <AuditMetricCard label="Nạp trong tháng" value={formatVnd(currentStats.totalDeposited)} tone="info" />
+                          <AuditMetricCard label="Trừ thủ công trong tháng" value={formatVnd(currentStats.totalFundDeductions)} tone="danger" />
                           <AuditMetricCard label="Đã chơi trong tháng" value={formatVnd(currentStats.totalPlayedCost)} tone="danger" />
                         </div>
+
+                      <Card>
+                        <CardHeader className="py-3 px-4">
+                          <CardTitle className="text-sm font-bold flex items-center gap-1.5">
+                            <Wallet className="h-4 w-4 text-muted-foreground" /> Điều chỉnh quỹ
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4 px-4 pb-4">
+                          <div className="grid gap-3 lg:grid-cols-[280px_minmax(220px,1fr)]">
+                            <div className="space-y-2 min-w-0">
+                              <Label>Loại điều chỉnh</Label>
+                              <div className="flex h-9 rounded-lg border bg-background p-0.5">
+                                {([
+                                  { value: 'add', label: 'Nạp', icon: Plus },
+                                  { value: 'subtract', label: 'Trừ', icon: MinusCircle },
+                                ] as const).map((mode) => {
+                                  const Icon = mode.icon;
+                                  const isSelected = fundAdjustmentMode === mode.value;
+                                  const selectedClass = mode.value === 'add'
+                                    ? 'bg-green-600 text-white shadow-sm'
+                                    : 'bg-destructive text-destructive-foreground shadow-sm';
+                                  return (
+                                    <button
+                                      key={mode.value}
+                                      type="button"
+                                      aria-pressed={isSelected}
+                                      onClick={() => {
+                                        setFundAdjustmentMode(mode.value);
+                                        setFundAdjustmentError('');
+                                      }}
+                                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                                        isSelected
+                                          ? selectedClass
+                                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                      }`}
+                                    >
+                                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                                      <span>{mode.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div className="space-y-2 min-w-0">
+                              <Label htmlFor="fundAdjustmentAmount">Số tiền</Label>
+                              <CurrencyInput
+                                id="fundAdjustmentAmount"
+                                value={fundAdjustmentAmount}
+                                onChange={(value) => {
+                                  setFundAdjustmentAmount(value);
+                                  setFundAdjustmentError('');
+                                }}
+                                placeholder="VD: 200,000…"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="fundAdjustmentReason">Lý do</Label>
+                            <textarea
+                              id="fundAdjustmentReason"
+                              name="fundAdjustmentReason"
+                              rows={2}
+                              value={fundAdjustmentReason}
+                              onChange={(event) => {
+                                setFundAdjustmentReason(event.target.value);
+                                setFundAdjustmentError('');
+                              }}
+                              placeholder={fundAdjustmentMode === 'add' ? 'VD: Nạp thêm quỹ tháng này' : 'VD: Dẫn thêm bạn đi chơi'}
+                              autoComplete="off"
+                              className="flex min-h-[64px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+                          </div>
+                          {fundAdjustmentError && (
+                            <p className="text-xs font-medium text-destructive">{fundAdjustmentError}</p>
+                          )}
+                          <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="grid grid-cols-3 gap-2 text-xs sm:min-w-[360px]">
+                              <div className="rounded-md bg-muted/50 p-2">
+                                <div className="font-medium text-muted-foreground">Hiện tại</div>
+                                <div className="mt-1 font-bold tabular-nums text-foreground">{formatVnd(cumulativeStats.rawBalance)}</div>
+                              </div>
+                              <div className="rounded-md bg-muted/50 p-2">
+                                <div className="font-medium text-muted-foreground">Thay đổi</div>
+                                <div className={`mt-1 font-bold tabular-nums ${fundAdjustmentMode === 'add' ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+                                  {fundAdjustmentMode === 'add' ? '+' : '-'}{formatVnd(fundAdjustmentAmount)}
+                                </div>
+                              </div>
+                              <div className="rounded-md bg-muted/50 p-2">
+                                <div className="font-medium text-muted-foreground">Sau lưu</div>
+                                <div className={`mt-1 font-bold tabular-nums ${previewDebt > 0 ? 'text-destructive' : 'text-green-600 dark:text-green-400'}`}>
+                                  {previewDebt > 0 ? `Nợ ${formatVnd(previewDebt)}` : formatVnd(previewBalance)}
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() => handleApplyFundAdjustment(member)}
+                              disabled={isApplyingFundAdjustment}
+                              className={fundAdjustmentMode === 'subtract' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+                            >
+                              {isApplyingFundAdjustment ? (
+                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                              ) : fundAdjustmentMode === 'add' ? (
+                                <Plus className="h-4 w-4" aria-hidden="true" />
+                              ) : (
+                                <MinusCircle className="h-4 w-4" aria-hidden="true" />
+                              )}
+                              <span>{fundAdjustmentMode === 'add' ? 'Nạp quỹ' : 'Trừ quỹ'}</span>
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
 
                       {/* Lịch sử chơi & Trừ quỹ */}
                       <Card>
@@ -876,7 +1067,7 @@ export default function Members() {
                             {currentStats.attendedSessions.length === 0 ? (
                               <div className="text-center py-6 text-xs text-muted-foreground">Chưa tham gia buổi đánh nào trong tháng này.</div>
                             ) : (
-                              <Table>
+                              <Table className="min-w-[520px]">
                                 <TableHeader>
                                   <TableRow className="text-xs">
                                     <TableHead className="py-2">Ngày chơi</TableHead>
@@ -903,35 +1094,47 @@ export default function Members() {
                         </CardContent>
                       </Card>
 
-                      {/* Lịch sử nạp tiền */}
+                      {/* Lịch sử quỹ */}
                       <Card>
                         <CardHeader className="py-3 px-4">
                           <CardTitle className="text-sm font-bold flex items-center gap-1.5">
-                            <DollarSign className="h-4 w-4 text-muted-foreground" /> Lịch sử nạp quỹ trong tháng ({currentStats.deposits.length} lần)
+                            <DollarSign className="h-4 w-4 text-muted-foreground" /> Lịch sử quỹ trong tháng ({currentStats.fundTransactions.length} giao dịch)
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                           <div className="max-h-[220px] overflow-y-auto px-4 pb-4">
-                            {currentStats.deposits.length === 0 ? (
-                              <div className="text-center py-6 text-xs text-muted-foreground">Chưa có giao dịch nạp tiền nào trong tháng này.</div>
+                            {currentStats.fundTransactions.length === 0 ? (
+                              <div className="text-center py-6 text-xs text-muted-foreground">Chưa có giao dịch quỹ nào trong tháng này.</div>
                             ) : (
-                              <Table>
+                              <Table className="min-w-[640px]">
                                 <TableHeader>
                                   <TableRow className="text-xs">
-                                    <TableHead className="py-2">Ngày nạp</TableHead>
+                                    <TableHead className="py-2">Ngày</TableHead>
+                                    <TableHead className="py-2">Loại</TableHead>
                                     <TableHead className="py-2">Mô tả</TableHead>
-                                    <TableHead className="py-2 text-right">Số tiền nạp</TableHead>
+                                    <TableHead className="py-2 text-right">Số tiền</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {currentStats.deposits
+                                    {currentStats.fundTransactions
                                       .toSorted((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                    .map(d => (
-                                      <TableRow key={d.id} className="text-xs">
-                                          <TableCell className="py-2 font-medium">{formatFullDate(d.date)}</TableCell>
-                                        <TableCell className="py-2 truncate max-w-[160px]">{d.description}</TableCell>
-                                        <TableCell className="py-2 text-right font-bold text-green-600 dark:text-green-400">
-                                            +{formatVnd(d.amount)}
+                                    .map(tx => (
+                                      <TableRow key={tx.id} className="text-xs">
+                                          <TableCell className="py-2 font-medium">{formatFullDate(tx.date)}</TableCell>
+                                        <TableCell className="py-2">
+                                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                            tx.type === 'income'
+                                              ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                                              : 'bg-destructive/10 text-destructive'
+                                          }`}>
+                                            {tx.type === 'income' ? 'Nạp' : 'Trừ'}
+                                          </span>
+                                        </TableCell>
+                                        <TableCell className="py-2 truncate max-w-[220px]">{tx.description}</TableCell>
+                                        <TableCell className={`py-2 text-right font-bold ${
+                                          tx.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-destructive'
+                                        }`}>
+                                            {tx.type === 'income' ? '+' : '-'}{formatVnd(tx.amount)}
                                         </TableCell>
                                       </TableRow>
                                     ))}
@@ -948,6 +1151,12 @@ export default function Members() {
                 {/* 2. KHÁCH VÃNG LAI */}
                 {type === 'guest' && (() => {
                   const paidIds = member.paidSessionIds || [];
+                  const unpaidSessions = cumulativeStats.attendedSessions
+                    .filter(session => !paidIds.includes(session.id))
+                    .toSorted((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                  const unpaidAmount = unpaidSessions.length * 35000;
+                  const paymentDescription = buildGuestPaymentDescription(member, unpaidSessions);
+                  const paymentQrUrl = buildSepayQrUrl(unpaidAmount, paymentDescription);
                   
                   return (
                     <div className="space-y-4">
@@ -964,6 +1173,48 @@ export default function Members() {
                           <AuditMetricCard label="Phát sinh nợ mới" value={formatVnd(currentStats.debt)} tone="danger" />
                         </div>
 
+                      {unpaidSessions.length > 0 && (
+                        <Card>
+                          <CardHeader className="py-3 px-4">
+                            <CardTitle className="text-sm font-bold flex items-center gap-1.5">
+                              <QrCode className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> QR thanh toán vãng lai
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="px-4 pb-4">
+                            <div className="grid gap-4 md:grid-cols-[160px_1fr]">
+                              <div className="flex aspect-square w-full max-w-[160px] items-center justify-center rounded-md border bg-white p-2">
+                                <img
+                                  src={paymentQrUrl}
+                                  alt={`QR thanh toán ${formatVnd(unpaidAmount)} cho ${member.name}`}
+                                  className="size-full object-contain"
+                                  loading="lazy"
+                                />
+                              </div>
+                              <div className="space-y-3">
+                                <div className="grid gap-2 sm:grid-cols-3">
+                                  <div className="rounded-md bg-muted/50 p-3 text-xs">
+                                    <div className="font-medium text-muted-foreground">Tổng thiếu</div>
+                                    <div className="mt-1 text-lg font-bold text-destructive tabular-nums">{formatVnd(unpaidAmount)}</div>
+                                  </div>
+                                  <div className="rounded-md bg-muted/50 p-3 text-xs">
+                                    <div className="font-medium text-muted-foreground">Buổi chưa đóng</div>
+                                    <div className="mt-1 text-lg font-bold tabular-nums">{unpaidSessions.length}</div>
+                                  </div>
+                                  <div className="rounded-md bg-primary/10 p-3 text-xs">
+                                    <div className="font-medium text-primary">Tài khoản</div>
+                                    <div className="mt-1 font-bold">{guestPaymentQrConfig.bank} · {guestPaymentQrConfig.account}</div>
+                                  </div>
+                                </div>
+                                <div className="rounded-md border bg-background p-3">
+                                  <div className="mb-1 text-xs font-medium text-muted-foreground">Nội dung chuyển khoản</div>
+                                  <div className="break-words text-sm font-semibold leading-relaxed">{paymentDescription}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
                       {/* Chi tiết đóng phí theo buổi */}
                       <Card>
                         <CardHeader className="py-3 px-4">
@@ -977,7 +1228,7 @@ export default function Members() {
                             {currentStats.attendedSessions.length === 0 ? (
                               <div className="text-center py-6 text-xs text-muted-foreground">Chưa tham gia buổi đánh nào trong tháng này.</div>
                             ) : (
-                              <Table>
+                              <Table className="min-w-[620px]">
                                 <TableHeader>
                                   <TableRow className="text-xs">
                                     <TableHead className="py-2">Ngày chơi</TableHead>
@@ -995,10 +1246,10 @@ export default function Members() {
                                         <TableRow key={s.id} className="text-xs">
                                             <TableCell className="py-2 font-medium">{formatFullDate(s.date)}</TableCell>
                                           <TableCell className="py-2 truncate max-w-[120px]">{s.location}</TableCell>
-                                            <TableCell className="py-2 font-bold text-amber-600">{formatVnd(35000)}</TableCell>
+                                            <TableCell className="py-2 font-bold text-amber-600 dark:text-amber-400">{formatVnd(35000)}</TableCell>
                                           <TableCell className="py-2 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isPaid ? 'bg-green-100 text-green-800' : 'bg-destructive/10 text-destructive'}`}>
+                                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isPaid ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' : 'bg-destructive/10 text-destructive'}`}>
                                                 {isPaid ? 'Đã đóng' : 'Chưa đóng (Nợ)'}
                                               </span>
                                                 <Checkbox 
@@ -1043,7 +1294,7 @@ export default function Members() {
                           {currentStats.attendedSessions.length === 0 ? (
                             <div className="text-center py-6 text-xs text-muted-foreground">Chưa tham gia buổi đánh nào trong tháng này.</div>
                           ) : (
-                            <Table>
+                            <Table className="min-w-[560px]">
                               <TableHeader>
                                 <TableRow className="text-xs">
                                   <TableHead className="py-2">Ngày chơi</TableHead>
@@ -1058,7 +1309,7 @@ export default function Members() {
                                     <TableRow key={s.id} className="text-xs">
                                         <TableCell className="py-2 font-medium">{formatFullDate(s.date)}</TableCell>
                                       <TableCell className="py-2 truncate max-w-[150px]">{s.location}</TableCell>
-                                      <TableCell className="py-2 text-right font-medium text-emerald-600">
+                                      <TableCell className="py-2 text-right font-medium text-emerald-600 dark:text-emerald-400">
                                         Đã chi trả (100% Quỹ)
                                       </TableCell>
                                     </TableRow>
