@@ -14,6 +14,7 @@ import { Checkbox } from '../components/ui/checkbox';
 import { CurrencyInput } from '../components/ui/currency-input';
 import { formatFullDate, formatShortDate, formatVnd } from '../lib/format';
 import { buildGuestPaymentDescription, buildSepayQrUrl, guestPaymentQrConfig } from '../lib/payment-qr';
+import { PageHeader } from '../components/ui/page-header';
 
 const skillLabels: Record<number, { label: string; color: string }> = {
   1: { label: 'Mới chơi', color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
@@ -500,34 +501,30 @@ export default function Members() {
 
   return (
     <div className="space-y-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-3xl font-bold tracking-tight text-pretty">Thành viên</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Quản lý danh sách chơi, trình độ và quỹ nạp trước.
-            </p>
-          </div>
-          
+      <PageHeader
+        title="Thành viên"
+        description="Quản lý danh sách thành viên, trình độ và quỹ tài chính trong nhóm."
+        action={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center lg:justify-end">
-          <Button 
-            variant="outline" 
-            onClick={syncAllFinance} 
-            disabled={isSyncing}
-            className="w-full sm:w-auto"
-          >
-            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
-            <span>Đồng bộ số dư</span>
-          </Button>
-
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <Button type="button" onClick={openAddDialog} className="w-full sm:w-auto">
-              <Plus className="h-4 w-4" aria-hidden="true" /> Thêm thành viên
+            <Button 
+              variant="outline" 
+              onClick={syncAllFinance} 
+              disabled={isSyncing}
+              className="w-full sm:w-auto"
+            >
+              <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>Đồng bộ số dư</span>
             </Button>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>{editingMember ? 'Sửa thành viên' : 'Thêm thành viên mới'}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
+
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Button type="button" onClick={openAddDialog} className="w-full sm:w-auto">
+                <Plus className="h-4 w-4" aria-hidden="true" /> Thêm thành viên
+              </Button>
+              <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>{editingMember ? 'Sửa thành viên' : 'Thêm thành viên mới'}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Họ và tên</Label>
                     <Input 
@@ -673,7 +670,8 @@ export default function Members() {
             </DialogContent>
           </Dialog>
         </div>
-        </div>
+      }
+    />
 
         <div className="grid gap-3 md:grid-cols-4">
           <Card>

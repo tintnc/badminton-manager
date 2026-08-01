@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
 import { AlertCircle, CheckCircle2, QrCode, ReceiptText, Users } from 'lucide-react';
 import { formatFullDate, formatShortDate, formatVnd } from '../lib/format';
+import { PageHeader } from '../components/ui/page-header';
 import type { Member, Session } from '../core/models/types';
 import { buildGuestPaymentDescription, buildSepayQrUrl, guestPaymentQrConfig } from '../lib/payment-qr';
 
@@ -166,7 +167,10 @@ export default function Finance() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Tài chính</h1>
+      <PageHeader
+        title="Tài chính"
+        description="Theo dõi quỹ hỗ trợ, chi phí và thanh toán khách vãng lai mỗi tháng."
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
