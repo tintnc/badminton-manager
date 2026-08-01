@@ -3,6 +3,9 @@ import { LayoutDashboard, CalendarDays, Users, Wallet, Settings, Menu, Swords, C
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Button } from './ui/button';
+import { Logo, ShuttlecockMark } from './logo';
+import { Toaster } from './ui/toast';
+import { PageSkeleton } from './ui/skeleton';
 
 const months = [
   'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
@@ -24,12 +27,46 @@ export default function Layout() {
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [hydrated, setHydrated] = useState(false);
   const monthPickerRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
-  const { initialize, globalMonth, globalYear, setGlobalDate } = useAppStore();
+  const {
+    initialize,
+    globalMonth,
+    globalYear,
+    setGlobalDate,
+    generateDemoData,
+    members,
+    sessions,
+    transactions,
+    shuttlecockBatches,
+  } = useAppStore();
+  const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
+
+  const hasNoData =
+    members.length === 0 &&
+    sessions.length === 0 &&
+    transactions.length === 0 &&
+    shuttlecockBatches.length === 0;
+
+  const handleGenerateDemo = async () => {
+    setIsGeneratingDemo(true);
+    try {
+      await generateDemoData(globalMonth, globalYear);
+    } finally {
+      setIsGeneratingDemo(false);
+    }
+  };
 
   useEffect(() => {
-    void initialize();
+    let cancelled = false;
+    (async () => {
+      await initialize();
+      if (!cancelled) setHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [initialize]);
 
   useEffect(() => {
@@ -102,10 +139,7 @@ export default function Layout() {
         }`}
       >
         <div className="flex items-center justify-center h-16 border-b px-4">
-          <span className="text-xl font-bold text-primary flex items-center gap-2">
-            <span className="bg-primary text-primary-foreground p-1 rounded-md">🏸</span>
-            BaddyClub
-          </span>
+          <Logo />
         </div>
 
         <nav role="navigation" aria-label="Primary navigation" className="p-4 space-y-1 overflow-y-auto">
@@ -142,7 +176,10 @@ export default function Layout() {
             >
               <Menu className="h-6 w-6" aria-hidden="true" />
             </button>
-            <span className="text-sm font-semibold text-foreground lg:hidden">BaddyClub</span>
+            <span className="text-sm font-semibold text-foreground lg:hidden flex items-center gap-2">
+              <ShuttlecockMark className="size-5 text-primary" />
+              BaddyClub
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -251,11 +288,45 @@ export default function Layout() {
         </header>
 
         <main className="flex-1 overflow-y-auto bg-muted/30">
-          <div className="mx-auto w-full max-w-screen-2xl px-4 py-5 sm:px-6 lg:px-8">
-            <Outlet />
+          <div
+            key={location.pathname}
+            className="mx-auto w-full max-w-screen-2xl px-4 py-5 sm:px-6 lg:px-8 animate-in fade-in-0 duration-300 motion-reduce:animate-none"
+          >
+            {hydrated && hasNoData ? (
+              <div className="flex min-h-[70vh] items-center justify-center">
+                <div className="w-full max-w-lg rounded-2xl border bg-card p-8 text-center shadow-sm">
+                  <div className="mx-auto mb-5 flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-blue-500 text-primary-foreground shadow-md">
+                    <ShuttlecockMark className="size-9" />
+                  </div>
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                    Chào mừng đến BaddyClub
+                  </h2>
+                  <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                    Chưa có dữ liệu nào. Bắt đầu nhanh bằng cách tạo một bộ dữ liệu demo
+                    (thành viên, buổi đánh, tài chính) cho tháng {months[globalMonth]} {globalYear}, hoặc tự nhập dữ liệu.
+                  </p>
+                  <div className="mt-6 flex flex-col gap-2">
+                    <Button size="lg" onClick={handleGenerateDemo} disabled={isGeneratingDemo}>
+                      {isGeneratingDemo ? (
+                        'Đang tạo…'
+                      ) : (
+                        `Tạo dữ liệu demo ${months[globalMonth].replace('Tháng ', 'T')}/${globalYear}`
+                      )}
+                    </Button>
+                    <Link to="/members" onClick={() => setSidebarOpen(false)}>
+                      <Button variant="ghost" className="w-full">Tự nhập dữ liệu thành viên</Button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              hydrated ? <Outlet /> : <PageSkeleton />
+            )}
           </div>
         </main>
       </div>
+
+      <Toaster />
     </div>
   );
 }

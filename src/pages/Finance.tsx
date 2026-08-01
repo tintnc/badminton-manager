@@ -5,10 +5,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
+import { StatCard } from '../components/ui/stat-card';
 import { AlertCircle, CheckCircle2, QrCode, ReceiptText, Users } from 'lucide-react';
 import { formatFullDate, formatShortDate, formatVnd } from '../lib/format';
 import { PageHeader } from '../components/ui/page-header';
 import type { Member, Session } from '../core/models/types';
+import { MemberFinanceService } from '../core/services/MemberFinanceService';
 import { buildGuestPaymentDescription, buildSepayQrUrl, guestPaymentQrConfig } from '../lib/payment-qr';
 
 const categoryLabels: Record<string, string> = {
@@ -79,7 +81,7 @@ export default function Finance() {
           member,
           unpaidSessions,
           unpaidThisMonth,
-          totalDebt: unpaidSessions.length * 35000,
+          totalDebt: unpaidSessions.length * settings.guestFee,
         };
       })
       .filter(row => row.unpaidSessions.length > 0)
@@ -93,15 +95,8 @@ export default function Finance() {
     };
   }, [currentMonthStr, members, sessions]);
 
-  const getGuestDebt = (member: Member, paidSessionIds: string[]) => {
-    const paidIds = new Set(paidSessionIds);
-    const unpaidSessionsCount = sessions.filter(session =>
-      session.status === 'completed'
-      && session.attendeeIds.includes(member.id)
-      && !paidIds.has(session.id)
-    ).length;
-    return unpaidSessionsCount * 35000;
-  };
+  const getGuestDebt = (member: Member, paidSessionIds: string[]) =>
+    MemberFinanceService.getGuestDebt({ ...member, paidSessionIds }, sessions, settings.guestFee);
 
   const collectGuestSession = async (member: Member, session: Session) => {
     const key = `${member.id}:${session.id}`;
@@ -117,7 +112,7 @@ export default function Finance() {
         date: new Date().toISOString(),
         type: 'income',
         category: 'member_payment',
-        amount: 35000,
+        amount: settings.guestFee,
         description: `Thu tiền vãng lai ${member.name} buổi ${formatShortDate(session.date)}`,
         relatedMemberId: member.id,
         relatedSessionId: session.id,
@@ -147,7 +142,7 @@ export default function Finance() {
           date: new Date().toISOString(),
           type: 'income',
           category: 'member_payment',
-          amount: 35000,
+          amount: settings.guestFee,
           description: `Thu tiền vãng lai ${member.name} buổi ${formatShortDate(session.date)}`,
           relatedMemberId: member.id,
           relatedSessionId: session.id,
@@ -173,42 +168,35 @@ export default function Finance() {
       />
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Quỹ ban đầu</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatVnd(settings.monthlySupportFund)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Đã hỗ trợ</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-500 dark:text-orange-400">-{formatVnd(totalSubsidyUsed)}</div>
-            <p className="text-xs text-muted-foreground">Từ {completedThisMonth.length} buổi đánh</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Quỹ còn lại</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${remainingFund <= 0 ? 'text-destructive' : 'text-primary'}`}>
-              {formatVnd(remainingFund)}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Tổng chi phí</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{formatVnd(totalExpenses)}</div>
-            <p className="text-xs text-muted-foreground">Sân + Cầu tháng này</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          variant="vertical"
+          label="Quỹ ban đầu"
+          value={formatVnd(settings.monthlySupportFund)}
+          revealDelay={0}
+        />
+        <StatCard
+          variant="vertical"
+          label="Đã hỗ trợ"
+          value={`-${formatVnd(totalSubsidyUsed)}`}
+          detail={`Từ ${completedThisMonth.length} buổi đánh`}
+          tone="warning"
+          revealDelay={80}
+        />
+        <StatCard
+          variant="vertical"
+          label="Quỹ còn lại"
+          value={formatVnd(remainingFund)}
+          tone={remainingFund <= 0 ? 'danger' : 'success'}
+          revealDelay={160}
+        />
+        <StatCard
+          variant="vertical"
+          label="Tổng chi phí"
+          value={formatVnd(totalExpenses)}
+          detail="Sân + Cầu tháng này"
+          tone="danger"
+          revealDelay={240}
+        />
       </div>
 
       {/* Member monthly stats */}
@@ -244,7 +232,7 @@ export default function Finance() {
                     <TableCell className="text-right">{sessionsCount}</TableCell>
                     <TableCell className="text-right">{formatVnd(totalNoSubsidy)}</TableCell>
                     <TableCell className="text-right font-semibold text-primary">{formatVnd(totalWithSubsidy)}</TableCell>
-                    <TableCell className="text-right font-medium text-green-600 dark:text-green-400">
+                    <TableCell className="text-right font-medium text-success">
                       {savings > 0 ? `-${formatVnd(savings)}` : formatVnd(0)}
                     </TableCell>
                   </TableRow>
@@ -290,7 +278,7 @@ export default function Finance() {
                       <TableCell className="text-right">{formatVnd(s.courtFee)}</TableCell>
                       <TableCell className="text-right">{formatVnd(s.shuttlecockFee || 0)}</TableCell>
                       <TableCell className="text-right font-medium">{formatVnd(s.totalCost || 0)}</TableCell>
-                      <TableCell className="text-right text-green-600 dark:text-green-400">-{formatVnd(s.fundSubsidyUsed || 0)}</TableCell>
+                      <TableCell className="text-right text-success">-{formatVnd(s.fundSubsidyUsed || 0)}</TableCell>
                       <TableCell className="text-right text-muted-foreground">{formatVnd(s.costPerPersonNoSubsidy || 0)}</TableCell>
                       <TableCell className="text-right font-bold text-primary">{formatVnd(s.costPerPerson || 0)}</TableCell>
                       <TableCell className="text-right">{s.attendeeIds.length + s.guestCount}</TableCell>
@@ -414,7 +402,7 @@ export default function Finance() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
-                        {formatVnd(unpaidThisMonth.length * 35000)}
+                        {formatVnd(unpaidThisMonth.length * settings.guestFee)}
                       </TableCell>
                       <TableCell className="text-right font-bold text-destructive tabular-nums">
                         {formatVnd(totalDebt)}
@@ -475,7 +463,7 @@ export default function Finance() {
                       <TableCell>
                         {tx.relatedMemberId ? members.find(m => m.id === tx.relatedMemberId)?.name || 'Không rõ' : '-'}
                       </TableCell>
-                      <TableCell className={`text-right font-medium ${tx.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+                      <TableCell className={`text-right font-medium tabular-nums ${tx.type === 'income' ? 'text-success' : 'text-destructive'}`}>
                         {tx.type === 'income' ? '+' : '-'}{formatVnd(tx.amount)}
                       </TableCell>
                     </TableRow>

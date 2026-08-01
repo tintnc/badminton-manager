@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { StatCard } from '@/components/ui/stat-card';
+import { toast } from '@/components/ui/toast';
 import { formatFullDate, formatNumber, formatVnd } from '@/lib/format';
 import { ShuttlecockInventoryService } from '@/core/services/ShuttlecockInventoryService';
 import { CostCalculator } from '@/core/services/CostCalculator';
@@ -20,42 +22,6 @@ function dateInputValue(date: Date): string {
 
 function dateInputToIso(date: string): string {
   return new Date(`${date}T12:00:00`).toISOString();
-}
-
-function MetricCard({
-  label,
-  value,
-  detail,
-  icon: Icon,
-  tone = 'default',
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-  icon: typeof Package;
-  tone?: 'default' | 'success' | 'danger' | 'info';
-}) {
-  const toneClass = {
-    default: 'text-foreground bg-muted',
-    success: 'text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-950',
-    danger: 'text-destructive bg-destructive/10',
-    info: 'text-sky-700 bg-sky-100 dark:text-sky-300 dark:bg-sky-950',
-  }[tone];
-
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className={`rounded-lg p-2 ${toneClass}`}>
-          <Icon className="h-5 w-5" aria-hidden="true" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-muted-foreground">{label}</p>
-          <p className="text-2xl font-bold tabular-nums">{value}</p>
-          {detail && <p className="truncate text-xs text-muted-foreground">{detail}</p>}
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
 export default function Shuttlecocks() {
@@ -81,7 +47,6 @@ export default function Shuttlecocks() {
   const [perTube, setPerTube] = useState(settings.shuttlecocksPerTube || 12);
   const [totalCost, setTotalCost] = useState(settings.shuttlecockTubePrice || 300000);
   const [notes, setNotes] = useState('');
-  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [editingBatch, setEditingBatch] = useState<ShuttlecockBatch | null>(null);
   const [editPurchaseDate, setEditPurchaseDate] = useState('');
   const [editTubes, setEditTubes] = useState(1);
@@ -175,7 +140,7 @@ export default function Shuttlecocks() {
 
   const handleAddBatch = async () => {
     if (tubes <= 0 || perTube <= 0 || totalCost <= 0) {
-      setStatusMessage({ type: 'error', text: 'Nhập số ống, số trái và tổng tiền hợp lệ.' });
+      toast('Nhập số ống, số trái và tổng tiền hợp lệ.', 'error');
       return;
     }
 
@@ -202,7 +167,7 @@ export default function Shuttlecocks() {
       relatedShuttlecockBatchId: batch.id,
     });
 
-    setStatusMessage({ type: 'success', text: 'Đã nhập lô cầu mới vào kho.' });
+    toast('Đã nhập lô cầu mới vào kho.');
     setTubes(1);
     setPerTube(settings.shuttlecocksPerTube || 12);
     setTotalCost(settings.shuttlecockTubePrice || 300000);
@@ -285,7 +250,8 @@ export default function Shuttlecocks() {
         session.courtFee,
         shuttlecockFee,
         attendees,
-        session.guestCount
+        session.guestCount,
+        settings.guestFee
       );
 
       const oldCostPerPerson = session.costPerPerson || 0;
@@ -406,21 +372,21 @@ export default function Shuttlecocks() {
     await updateShuttlecockBatch(updatedBatch);
     await recalculateSessionsForEditedBatch(updatedBatch, editingBatch);
     setEditingBatch(null);
-    setStatusMessage({ type: 'success', text: 'Đã cập nhật lô cầu.' });
+    toast('Đã cập nhật lô cầu.');
   };
 
   const handleDeleteBatch = async () => {
     if (!batchToDelete) return;
     const usedQuantity = summary.usedByBatch.get(batchToDelete.id) ?? 0;
     if (usedQuantity > 0) {
-      setStatusMessage({ type: 'error', text: `Không thể xóa lô đã dùng ${formatNumber(usedQuantity)} trái. Hãy sửa thông tin lô thay vì xóa.` });
+      toast(`Không thể xóa lô đã dùng ${formatNumber(usedQuantity)} trái. Hãy sửa thông tin lô thay vì xóa.`, 'error');
       setBatchToDelete(null);
       return;
     }
 
     await deleteShuttlecockBatch(batchToDelete.id);
     setBatchToDelete(null);
-    setStatusMessage({ type: 'success', text: 'Đã xóa lô cầu chưa sử dụng.' });
+    toast('Đã xóa lô cầu chưa sử dụng.');
   };
 
   return (
@@ -430,54 +396,45 @@ export default function Shuttlecocks() {
         description="Quản lý lô cầu nhập kho, tồn kho và chi phí sử dụng FIFO cho mỗi buổi."
       />
 
-      {statusMessage && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={`rounded-md border p-3 text-sm ${
-            statusMessage.type === 'success'
-              ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300'
-              : 'border-destructive/30 bg-destructive/10 text-destructive'
-          }`}
-        >
-          {statusMessage.text}
-        </div>
-      )}
-
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard
+        <StatCard
           label="Tồn đầu tháng"
           value={`${formatNumber(summary.openingStock)} trái`}
           detail="Mang sang từ tháng trước"
           icon={Archive}
           tone="info"
+          revealDelay={0}
         />
-        <MetricCard
+        <StatCard
           label="Mua trong tháng"
           value={`${formatNumber(summary.purchasedThisMonth)} trái`}
           detail={formatVnd(summary.purchaseCostThisMonth)}
           icon={ShoppingCart}
+          revealDelay={80}
         />
-        <MetricCard
+        <StatCard
           label="Dùng trong tháng"
           value={`${formatNumber(summary.usedThisMonth)} trái`}
           detail={formatVnd(summary.usageCostThisMonth)}
           icon={TrendingDown}
           tone="danger"
+          revealDelay={160}
         />
-        <MetricCard
+        <StatCard
           label="Tồn cuối tháng"
           value={`${formatNumber(summary.endingStock)} trái`}
           detail={`Hiện tại: ${formatNumber(summary.remainingShuttlecocks)} trái · ${formatVnd(summary.inventoryValue)}`}
           icon={Archive}
           tone="success"
+          revealDelay={240}
         />
-        <MetricCard
+        <StatCard
           label="Lô đang dùng"
           value={summary.activeBatch ? `${formatNumber(summary.activeBatch.remainingShuttlecocks)} trái` : 'Hết cầu'}
           detail={summary.activeBatch ? `${formatVnd(summary.activeBatch.unitCost)} / trái` : 'Cần nhập thêm cầu'}
           icon={Package}
           tone={summary.activeBatch ? 'info' : 'danger'}
+          revealDelay={320}
         />
       </div>
 

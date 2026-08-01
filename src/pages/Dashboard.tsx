@@ -1,7 +1,9 @@
 import { useAppStore } from '@/store/useAppStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
-import { Wallet, Users, CalendarDays, TrendingDown, CheckCircle2 } from 'lucide-react';
+import { Wallet, Users, CalendarDays, TrendingDown, CheckCircle2, Trophy } from 'lucide-react';
 import { XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import { formatNumber, formatShortDate, formatVnd } from '@/lib/format';
 
@@ -83,62 +85,52 @@ export default function Dashboard() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Quỹ còn lại</CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${remainingFund <= 0 ? 'text-destructive' : ''}`}>
-              {formatVnd(remainingFund)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Quỹ ban đầu: {formatVnd(settings.monthlySupportFund)} · Đã dùng: {formatVnd(totalSubsidyUsed)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Thành viên</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeMembers}</div>
-            <p className="text-xs text-muted-foreground">Người chơi đang hoạt động</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Chi phí tháng này</CardTitle>
-            <TrendingDown className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{formatVnd(totalExpensesThisMonth)}</div>
-            <p className="text-xs text-muted-foreground">Tổng sân + cầu từ {completedThisMonth.length} buổi</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Buổi đánh</CardTitle>
-            <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+        <StatCard
+          variant="vertical"
+          label="Quỹ còn lại"
+          value={formatVnd(remainingFund)}
+          detail={`Quỹ ban đầu: ${formatVnd(settings.monthlySupportFund)} · Đã dùng: ${formatVnd(totalSubsidyUsed)}`}
+          icon={Wallet}
+          tone={remainingFund <= 0 ? 'danger' : 'default'}
+          revealDelay={0}
+        />
+        <StatCard
+          variant="vertical"
+          label="Thành viên"
+          value={activeMembers}
+          detail="Người chơi đang hoạt động"
+          icon={Users}
+          revealDelay={80}
+        />
+        <StatCard
+          variant="vertical"
+          label="Chi phí tháng này"
+          value={formatVnd(totalExpensesThisMonth)}
+          detail={`Tổng sân + cầu từ ${completedThisMonth.length} buổi`}
+          icon={TrendingDown}
+          tone="danger"
+          revealDelay={160}
+        />
+        <StatCard
+          variant="vertical"
+          label="Buổi đánh"
+          value={
+            <>
               <span className="text-primary">{completedThisMonth.length}</span>
               <span className="text-muted-foreground text-base font-normal"> / {sessionsThisMonth.length}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Đã hoàn thành · Còn {plannedThisMonth.length} buổi chưa điểm danh
-            </p>
-          </CardContent>
-        </Card>
+            </>
+          }
+          detail={`Đã hoàn thành · Còn ${plannedThisMonth.length} buổi chưa điểm danh`}
+          icon={CalendarDays}
+          revealDelay={240}
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         {/* Tần suất tham gia chi tiết */}
         <Card className="flex flex-col lg:col-span-4">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-bold">Tần suất tham gia chi tiết (Tháng này)</CardTitle>
+            <CardTitle className="text-lg font-bold">Tần suất tham gia</CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto max-h-[380px] pr-2">
             {memberAttendanceStats.length === 0 ? (
@@ -178,12 +170,11 @@ export default function Dashboard() {
           <CardContent className="flex-1">
             <div className="space-y-4">
               {leaderboard.length === 0 ? (
-                <div className="flex items-center">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Chưa có dữ liệu</p>
-                    <p className="text-sm text-muted-foreground">Hoàn thành một buổi đánh để xem bảng xếp hạng.</p>
-                  </div>
-                </div>
+                <EmptyState
+                  icon={Trophy}
+                  title="Chưa có bảng xếp hạng"
+                  description="Hoàn thành một buổi đánh để theo dõi ai tham gia nhiều nhất."
+                />
               ) : (
                 leaderboard.map((entry, i) => (
                   <div key={entry.member!.id} className="flex items-center justify-between">
@@ -231,19 +222,19 @@ export default function Dashboard() {
                 <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorFund" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0}/>
                     </linearGradient>
                     <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="hsl(var(--destructive))" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="hsl(var(--destructive))" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value: number) => `${formatNumber(value / 1000)}k`} />
+                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value: number) => `${formatNumber(value / 1000)}k`} />
                   <Tooltip formatter={(value) => [formatVnd(Number(value ?? 0)), ""]} labelFormatter={(label) => `Buổi ${label}`} />
-                  <Area type="monotone" name="Quỹ còn lại" dataKey="quỹ_còn_lại" stroke="#10b981" fillOpacity={1} fill="url(#colorFund)" />
-                  <Area type="monotone" name="Chi phí" dataKey="chi_phí" stroke="#f43f5e" fillOpacity={1} fill="url(#colorExpenses)" />
+                  <Area type="monotone" name="Quỹ còn lại" dataKey="quỹ_còn_lại" stroke="hsl(var(--success))" fillOpacity={1} fill="url(#colorFund)" />
+                  <Area type="monotone" name="Chi phí" dataKey="chi_phí" stroke="hsl(var(--destructive))" fillOpacity={1} fill="url(#colorExpenses)" />
                 </AreaChart>
               </ResponsiveContainer>
             )}

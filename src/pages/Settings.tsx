@@ -6,23 +6,33 @@ import { Label } from '../components/ui/label';
 import { saveAs } from 'file-saver';
 import { Download, Upload, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from '../components/ui/toast';
 import { CostCalculator } from '../core/services/CostCalculator';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { formatVnd } from '../lib/format';
 import { PageHeader } from '../components/ui/page-header';
+import { APP_VERSION } from '../core/config/defaults';
 
 import { CurrencyInput, IntegerInput } from '../components/ui/currency-input';
+
+const months = [
+  'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+  'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
+];
 
 export default function Settings() {
   const store = useAppStore();
   const { settings, updateSettings, members, sessions, transactions, shuttlecockBatches } = store;
+  const { globalMonth, globalYear } = store;
 
   const [fund, setFund] = useState(settings.monthlySupportFund);
   const [location, setLocation] = useState(settings.defaultLocation);
   const [tubePrice, setTubePrice] = useState(settings.shuttlecockTubePrice ?? 300000);
   const [perTube, setPerTube] = useState(settings.shuttlecocksPerTube ?? 12);
-  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [guestFee, setGuestFee] = useState(settings.guestFee ?? 35000);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDemoOpen, setIsDemoOpen] = useState(false);
+  const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
 
   const pricePerBird = CostCalculator.pricePerShuttlecock(tubePrice, perTube);
 
@@ -32,13 +42,24 @@ export default function Settings() {
       defaultLocation: location,
       shuttlecockTubePrice: tubePrice,
       shuttlecocksPerTube: perTube,
+      guestFee,
     });
-    setStatusMessage({ type: 'success', text: 'Đã lưu cài đặt.' });
+    toast('Đã lưu cài đặt.');
+  };
+
+  const handleGenerateDemo = async () => {
+    setIsGeneratingDemo(true);
+    try {
+      await store.generateDemoData(globalMonth, globalYear);
+      setIsDemoOpen(false);
+    } finally {
+      setIsGeneratingDemo(false);
+    }
   };
 
   const handleExport = () => {
     const data = {
-      version: '1.0.0',
+      version: APP_VERSION,
       exportDate: new Date().toISOString(),
       members,
       sessions,
@@ -73,16 +94,16 @@ export default function Settings() {
             body: JSON.stringify(restored),
           });
           if (!response.ok) {
-            setStatusMessage({ type: 'error', text: 'Không ghi được vào data/badminton-data.json. Hãy chạy app bằng npm run dev.' });
+            toast('Không ghi được vào data/badminton-data.json. Hãy chạy app bằng npm run dev.', 'error');
             return;
           }
-          setStatusMessage({ type: 'success', text: 'Khôi phục thành công. Trang sẽ tải lại để áp dụng dữ liệu.' });
+          toast('Khôi phục thành công. Trang sẽ tải lại để áp dụng dữ liệu.');
           window.setTimeout(() => window.location.reload(), 600);
         } else {
-          setStatusMessage({ type: 'error', text: 'Tệp sao lưu thiếu dữ liệu thành viên hoặc buổi đánh.' });
+          toast('Tệp sao lưu thiếu dữ liệu thành viên hoặc buổi đánh.', 'error');
         }
       } catch {
-        setStatusMessage({ type: 'error', text: 'Tệp sao lưu không hợp lệ.' });
+        toast('Tệp sao lưu không hợp lệ.', 'error');
       }
     };
     reader.readAsText(file);
@@ -94,19 +115,6 @@ export default function Settings() {
         title="Cài đặt"
         description="Cập nhật giá mặc định và quản lý sao lưu dữ liệu cho toàn bộ nhóm."
       />
-      {statusMessage && (
-          <div
-            role="status"
-            aria-live="polite"
-            className={`rounded-md border p-3 text-sm ${
-              statusMessage.type === 'success'
-                ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300'
-                : 'border-destructive/30 bg-destructive/10 text-destructive'
-            }`}
-          >
-            {statusMessage.text}
-          </div>
-        )}
 
       <div className="grid gap-6 md:grid-cols-2">
 
@@ -135,6 +143,18 @@ export default function Settings() {
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="guestFee">Phí khách vãng lai mỗi buổi (₫)</Label>
+                  <CurrencyInput
+                    id="guestFee"
+                    value={guestFee}
+                    onChange={setGuestFee}
+                    placeholder="VD: 35,000…"
+                  />
+              <p className="text-[11px] text-muted-foreground">
+                Khách vãng lai đóng cố định số tiền này cho mỗi buổi tham gia.
+              </p>
             </div>
           </CardContent>
           <CardFooter>
@@ -226,6 +246,18 @@ export default function Settings() {
               </Label>
             </div>
 
+            <div className="rounded-md bg-muted/50 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">Dữ liệu demo</p>
+                <p className="text-xs text-muted-foreground">
+                  Thay dữ liệu hiện tại bằng bộ dữ liệu demo của tháng {months[globalMonth]} {globalYear}.
+                </p>
+              </div>
+              <Button variant="outline" className="shrink-0" onClick={() => setIsDemoOpen(true)}>
+                <ShoppingCart className="h-4 w-4" /> Tạo dữ liệu demo
+              </Button>
+            </div>
+
             <div className="rounded-md border border-destructive p-4">
               <div className="flex items-center gap-2 text-destructive mb-2 font-semibold">
                 <AlertTriangle className="h-5 w-5" /> Khu vực nguy hiểm
@@ -265,6 +297,25 @@ export default function Settings() {
               }}
               >
                 Xóa dữ liệu
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={isDemoOpen} onOpenChange={setIsDemoOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Tạo dữ liệu demo?</DialogTitle>
+              <DialogDescription>
+                Dữ liệu hiện tại (thành viên, buổi đánh, giao dịch) sẽ bị thay thế bằng bộ dữ liệu demo
+                của tháng {months[globalMonth]} {globalYear}. Hãy xuất bản sao lưu trước nếu cần.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsDemoOpen(false)}>
+                Hủy
+              </Button>
+              <Button onClick={handleGenerateDemo} disabled={isGeneratingDemo}>
+                {isGeneratingDemo ? 'Đang tạo…' : 'Tạo dữ liệu demo'}
               </Button>
             </div>
           </DialogContent>

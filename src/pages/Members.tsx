@@ -3,8 +3,11 @@ import { useAppStore } from '../store/useAppStore';
 import type { Member, Session } from '../core/models/types';
 import { v4 as uuidv4 } from 'uuid';
 import { CostCalculator } from '../core/services/CostCalculator';
+import { MemberFinanceService } from '../core/services/MemberFinanceService';
 import { Plus, Edit2, Trash2, Star, RefreshCw, Calendar, DollarSign, Search, Users, Wallet, AlertCircle, MinusCircle, Loader2, QrCode } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { StatCard } from '../components/ui/stat-card';
+import { MemberTypeBadge, SkillBadge, skillLabels } from '../components/member-badges';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
@@ -15,45 +18,6 @@ import { CurrencyInput } from '../components/ui/currency-input';
 import { formatFullDate, formatShortDate, formatVnd } from '../lib/format';
 import { buildGuestPaymentDescription, buildSepayQrUrl, guestPaymentQrConfig } from '../lib/payment-qr';
 import { PageHeader } from '../components/ui/page-header';
-
-const skillLabels: Record<number, { label: string; color: string }> = {
-  1: { label: 'Mới chơi', color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
-  2: { label: 'Trung bình', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
-  3: { label: 'Khá', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' },
-  4: { label: 'Mạnh', color: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' },
-};
-
-function SkillBadge({ level }: { level: number }) {
-  const info = skillLabels[level] || skillLabels[1];
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${info.color}`}>
-      <Star className="h-3 w-3" /> {info.label}
-    </span>
-  );
-}
-
-function MemberTypeBadge({ type }: { type?: 'employee' | 'guest' | 'regular' }) {
-  const t = type || 'regular';
-  if (t === 'employee') {
-    return (
-      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-        Nhân viên
-      </span>
-    );
-  }
-  if (t === 'guest') {
-    return (
-      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-        Vãng lai
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
-      Thường
-    </span>
-  );
-}
 
 function AuditMetricCard({
   label,
@@ -66,27 +30,8 @@ function AuditMetricCard({
   tone?: 'default' | 'success' | 'danger' | 'info';
   detail?: string;
 }) {
-  const toneClass = {
-    default: 'text-foreground',
-    success: 'text-green-600 dark:text-green-400',
-    danger: 'text-destructive',
-    info: 'text-sky-600 dark:text-sky-400',
-  }[tone];
-
   return (
-    <Card className="bg-muted/30">
-      <CardContent className="flex min-h-[112px] flex-col justify-center gap-2 p-4 text-center">
-        <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-          {label}
-        </span>
-        <div className={`text-xl font-bold tabular-nums ${toneClass}`}>{value}</div>
-        {detail && (
-          <div className="text-[11px] text-muted-foreground">
-            {detail}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <StatCard variant="vertical" label={label} value={value} tone={tone} detail={detail} className="bg-muted/30" />
   );
 }
 
@@ -105,70 +50,17 @@ export default function Members() {
     globalYear
   } = useAppStore();
 
-  const calculateMemberFinancials = (member: Member, endMonth: number, endYear: number, startMonth?: number, startYear?: number) => {
-    const type = member.membershipType || 'regular';
-    
-    // Upper limit (exclusive)
-    const endLimitDate = new Date(endYear, endMonth + 1, 1).toISOString();
-    // Lower limit (inclusive), if provided
-    const startLimitDate = (startMonth !== undefined && startYear !== undefined) 
-      ? new Date(startYear, startMonth, 1).toISOString() 
-      : null;
-
-    const isWithinRange = (dateStr: string) => {
-      if (dateStr >= endLimitDate) return false;
-      if (startLimitDate && dateStr < startLimitDate) return false;
-      return true;
-    };
-
-    if (type === 'regular') {
-      const fundTransactions = transactions.filter(t => t.relatedMemberId === member.id && t.category === 'member_payment' && isWithinRange(t.date));
-      const deposits = fundTransactions.filter(t => t.type === 'income');
-      const fundDeductions = fundTransactions.filter(t => t.type === 'expense');
-      const totalDeposited = deposits.reduce((sum, t) => sum + t.amount, 0);
-      const totalFundDeductions = fundDeductions.reduce((sum, t) => sum + t.amount, 0);
-
-      const attendedSessions = sessions.filter(s => s.status === 'completed' && s.attendeeIds.includes(member.id) && isWithinRange(s.date));
-      const totalPlayedCost = attendedSessions.reduce((sum, s) => sum + (s.costPerPerson || 0), 0);
-
-      const balance = totalDeposited - totalFundDeductions - totalPlayedCost;
-      return {
-        balance: balance > 0 ? balance : 0,
-        debt: balance < 0 ? -balance : 0,
-        rawBalance: balance,
-        totalDeposited,
-        totalFundDeductions,
-        totalPlayedCost,
-        deposits,
-        fundDeductions,
-        fundTransactions,
-        attendedSessions
-      };
-    }
-    
-    if (type === 'guest') {
-      const attendedSessions = sessions.filter(s => s.status === 'completed' && s.attendeeIds.includes(member.id) && isWithinRange(s.date));
-      const totalDebtIncurred = attendedSessions.length * 35000;
-        
-      const deposits = transactions.filter(t => t.relatedMemberId === member.id && t.type === 'income' && t.category === 'member_payment' && isWithinRange(t.date));
-      const totalPaid = deposits.reduce((sum, t) => sum + t.amount, 0);
-        
-      return {
-        balance: 0,
-        debt: Math.max(0, totalDebtIncurred - totalPaid),
-        rawBalance: totalPaid - totalDebtIncurred,
-        totalDeposited: totalPaid,
-        totalFundDeductions: 0,
-        totalPlayedCost: totalDebtIncurred,
-        deposits,
-        fundDeductions: [],
-        fundTransactions: deposits,
-        attendedSessions
-      };
-    }
-
-    return { balance: 0, debt: 0, rawBalance: 0, totalDeposited: 0, totalFundDeductions: 0, totalPlayedCost: 0, deposits: [], fundDeductions: [], fundTransactions: [], attendedSessions: [] };
-  };
+  const calculateMemberFinancials = (member: Member, endMonth: number, endYear: number, startMonth?: number, startYear?: number) =>
+    MemberFinanceService.calculateMemberFinancials(
+      member,
+      sessions,
+      transactions,
+      settings.guestFee,
+      endMonth,
+      endYear,
+      startMonth,
+      startYear
+    );
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
@@ -296,10 +188,7 @@ export default function Members() {
           });
         }
       } else if (type === 'guest') {
-        const sessionsAttended = completedSessionsForSync.filter(s => s.attendeeIds.includes(member.id));
-        const paidIds = member.paidSessionIds || [];
-        const unpaidSessions = sessionsAttended.filter(s => !paidIds.includes(s.id));
-        const unpaidDebt = unpaidSessions.length * 35000;
+        const unpaidDebt = MemberFinanceService.getGuestDebt(member, completedSessionsForSync, settings.guestFee);
         
         if (member.debt !== unpaidDebt) {
           await updateMember({
@@ -474,7 +363,7 @@ export default function Members() {
           date: new Date().toISOString(),
           type: 'income',
           category: 'member_payment',
-          amount: 35000,
+          amount: settings.guestFee,
           description: `Thu tiền vãng lai ${member.name} buổi ${dateLabel}`,
           relatedMemberId: member.id,
           relatedSessionId: session.id,
@@ -486,13 +375,10 @@ export default function Members() {
     }
 
     const completedSessions = sessions.filter(s => s.status === 'completed' && s.attendeeIds.includes(member.id));
-    const unpaidSessionsCount = completedSessions.filter(s => !newPaidIds.includes(s.id)).length;
-    const unpaidDebt = unpaidSessionsCount * 35000;
-
     const updatedMember = {
       ...member,
       paidSessionIds: newPaidIds,
-      debt: unpaidDebt
+      debt: MemberFinanceService.getGuestDebt({ ...member, paidSessionIds: newPaidIds }, completedSessions, settings.guestFee),
     };
 
     await updateMember(updatedMember);
@@ -674,50 +560,33 @@ export default function Members() {
     />
 
         <div className="grid gap-3 md:grid-cols-4">
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                <Users className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Đang hoạt động</p>
-                <p className="text-2xl font-bold tabular-nums">{memberSummary.active}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="rounded-lg bg-green-100 p-2 text-green-700 dark:bg-green-950 dark:text-green-300">
-                <Wallet className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Quỹ đã nạp</p>
-                <p className="text-2xl font-bold tabular-nums text-green-600 dark:text-green-400">{formatVnd(memberSummary.prepaid)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                <Users className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Nhân viên</p>
-                <p className="text-2xl font-bold tabular-nums">{memberSummary.employees}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="rounded-lg bg-amber-100 p-2 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                <AlertCircle className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Khách vãng lai</p>
-                <p className="text-2xl font-bold tabular-nums">{memberSummary.guests}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <StatCard
+            label="Đang hoạt động"
+            value={memberSummary.active}
+            icon={Users}
+            revealDelay={0}
+          />
+          <StatCard
+            label="Quỹ đã nạp"
+            value={formatVnd(memberSummary.prepaid)}
+            icon={Wallet}
+            tone="success"
+            revealDelay={80}
+          />
+          <StatCard
+            label="Nhân viên"
+            value={memberSummary.employees}
+            icon={Users}
+            tone="info"
+            revealDelay={160}
+          />
+          <StatCard
+            label="Khách vãng lai"
+            value={memberSummary.guests}
+            icon={AlertCircle}
+            tone="warning"
+            revealDelay={240}
+          />
         </div>
 
         <Card>
@@ -1152,7 +1021,7 @@ export default function Members() {
                   const unpaidSessions = cumulativeStats.attendedSessions
                     .filter(session => !paidIds.includes(session.id))
                     .toSorted((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-                  const unpaidAmount = unpaidSessions.length * 35000;
+                  const unpaidAmount = unpaidSessions.length * settings.guestFee;
                   const paymentDescription = buildGuestPaymentDescription(member, unpaidSessions);
                   const paymentQrUrl = buildSepayQrUrl(unpaidAmount, paymentDescription);
                   
@@ -1218,7 +1087,7 @@ export default function Members() {
                         <CardHeader className="py-3 px-4">
                           <CardTitle className="text-sm font-bold flex items-center justify-between">
                             <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4 text-muted-foreground" /> Quản lý đóng phí theo buổi chơi</span>
-                              <span className="text-xs font-semibold text-primary">Tick đóng 35k/buổi</span>
+                              <span className="text-xs font-semibold text-primary">Tick đóng {formatVnd(settings.guestFee)}/buổi</span>
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
@@ -1244,7 +1113,7 @@ export default function Members() {
                                         <TableRow key={s.id} className="text-xs">
                                             <TableCell className="py-2 font-medium">{formatFullDate(s.date)}</TableCell>
                                           <TableCell className="py-2 truncate max-w-[120px]">{s.location}</TableCell>
-                                            <TableCell className="py-2 font-bold text-amber-600 dark:text-amber-400">{formatVnd(35000)}</TableCell>
+                                            <TableCell className="py-2 font-bold text-amber-600 dark:text-amber-400">{formatVnd(settings.guestFee)}</TableCell>
                                           <TableCell className="py-2 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isPaid ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' : 'bg-destructive/10 text-destructive'}`}>

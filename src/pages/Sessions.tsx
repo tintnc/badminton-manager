@@ -4,6 +4,7 @@ import type { Member, Session } from '../core/models/types';
 import { ScheduleGenerator } from '../core/services/ScheduleGenerator';
 import { CostCalculator } from '../core/services/CostCalculator';
 import { ShuttlecockInventoryService } from '../core/services/ShuttlecockInventoryService';
+import { MemberFinanceService } from '../core/services/MemberFinanceService';
 import { Calendar, Users as UsersIcon, CheckCircle2, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -12,6 +13,8 @@ import { Label } from '../components/ui/label';
 import { Checkbox } from '../components/ui/checkbox';
 import { formatFullDate, formatShortDate, formatVnd } from '../lib/format';
 import { PageHeader } from '../components/ui/page-header';
+import { MemberTypeBadge } from '../components/member-badges';
+import { EmptyState } from '../components/ui/empty-state';
 
 import { CurrencyInput, IntegerInput } from '../components/ui/currency-input';
 
@@ -38,29 +41,6 @@ export default function Sessions() {
   const [isGenerateConfirmOpen, setIsGenerateConfirmOpen] = useState(false);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [attendanceError, setAttendanceError] = useState('');
-
-  function MemberTypeBadge({ type }: { type?: 'employee' | 'guest' | 'regular' }) {
-    const t = type || 'regular';
-    if (t === 'employee') {
-      return (
-        <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-          Nhân viên
-        </span>
-      );
-    }
-    if (t === 'guest') {
-      return (
-        <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-          Vãng lai
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
-        Thường
-      </span>
-    );
-  }
 
   const filteredSessions = sessions.filter(s => {
     const d = new Date(s.date);
@@ -130,7 +110,8 @@ export default function Sessions() {
       session.courtFee,
       shuttlecockPreview.totalCost,
       attendees,
-      session.guestCount
+      session.guestCount,
+      settings.guestFee
     );
   };
 
@@ -161,9 +142,11 @@ export default function Sessions() {
               prepaidBalance: (member.prepaidBalance || 0) + oldSession.costPerPerson,
             });
           } else if (type === 'guest') {
+            // The per-session payment transaction is rolled back below, so also
+            // un-mark this session as paid to keep paidSessionIds consistent.
             memberUpdates.set(oldAttendeeId, {
               ...member,
-              debt: Math.max(0, (member.debt || 0) - 35000),
+              paidSessionIds: (member.paidSessionIds || []).filter(id => id !== activeSession.id),
             });
           }
         }
@@ -179,8 +162,18 @@ export default function Sessions() {
       activeSession.courtFee,
       shuttlecockFee,
       attendees,
-      activeSession.guestCount
+      activeSession.guestCount,
+      settings.guestFee
     );
+
+    // Guard: the company subsidy must not exceed the remaining monthly fund.
+    const remainingFund = getRemainingFund(activeSession.id);
+    if (breakdown.subsidyUsed > remainingFund) {
+      setAttendanceError(
+        `Quỹ hỗ trợ cần ${formatVnd(breakdown.subsidyUsed)} nhưng quỹ tháng này chỉ còn ${formatVnd(remainingFund)}. Hãy cập nhật quỹ trong Cài đặt hoặc giảm số nhân viên tham gia.`
+      );
+      return;
+    }
 
     const {
       totalCost,
@@ -200,12 +193,21 @@ export default function Sessions() {
           ...member,
           prepaidBalance: (member.prepaidBalance || 0) - costPerPerson,
         });
-      } else if (type === 'guest') {
-        memberUpdates.set(attendee.id, {
-          ...member,
-          debt: (member.debt || 0) + 35000,
-        });
       }
+    }
+
+    // 3b. Reconcile guest debt from paidSessionIds so stored debt always matches
+    // the per-session payment checkboxes (single source of truth).
+    const reconciledSessions: Session[] = [
+      ...sessions.filter(s => s.id !== activeSession.id),
+      { ...activeSession, status: 'completed' },
+    ];
+    for (const [memberId, member] of memberUpdates) {
+      if ((member.membershipType || 'regular') !== 'guest') continue;
+      memberUpdates.set(memberId, {
+        ...member,
+        debt: MemberFinanceService.getGuestDebt(member, reconciledSessions, settings.guestFee),
+      });
     }
 
     for (const updatedMember of memberUpdates.values()) {
@@ -309,8 +311,17 @@ export default function Sessions() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredSessions.length === 0 ? (
-          <div className="col-span-full py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
-            Chưa có lịch đánh trong tháng này. Hãy nhấn "Tạo lịch" để bắt đầu.
+          <div className="col-span-full bg-muted/20 rounded-xl border border-dashed">
+            <EmptyState
+              icon={Calendar}
+              title="Chưa có lịch đánh trong tháng này"
+              description="Tạo lịch tự động cho tháng để bắt đầu quản lý các buổi đánh."
+              action={
+                <Button onClick={handleGenerate}>
+                  <Calendar className="mr-2 h-4 w-4" /> Tạo lịch
+                </Button>
+              }
+            />
           </div>
         ) : (
           filteredSessions.map(session => (
@@ -494,15 +505,15 @@ export default function Sessions() {
                       <div className="bg-muted/50 p-3 rounded-md space-y-2 text-xs">
                         <div className="flex justify-between gap-3 font-medium">
                           <span className="min-w-0">1. Khách vãng lai ({calc.guestCountTotal} người):</span>
-                          <span className="shrink-0 text-right font-bold text-amber-600 dark:text-amber-400">+{formatVnd(calc.guestFeeTotal)}</span>
+                          <span className="shrink-0 text-right font-bold text-warning">+{formatVnd(calc.guestFeeTotal)}</span>
                         </div>
                         <div className="flex justify-between gap-3 pl-3 text-muted-foreground">
-                          <span>(Mỗi người đóng cố định 35k)</span>
+                          <span>(Mỗi người đóng cố định {formatVnd(settings.guestFee)})</span>
                         </div>
 
                         <div className="flex justify-between gap-3 border-t pt-1.5 font-medium">
                           <span className="min-w-0">2. Thành viên thường ({calc.regularCount} người):</span>
-                          <span className="shrink-0 text-right font-bold text-sky-600 dark:text-sky-400">-{formatVnd(calc.regularCount * calc.costPerPerson)}</span>
+                          <span className="shrink-0 text-right font-bold text-info">-{formatVnd(calc.regularCount * calc.costPerPerson)}</span>
                         </div>
                         <div className="flex justify-between gap-3 pl-3 text-muted-foreground">
                           <span className="min-w-0">(Tiền cầu chia đều cho {calc.employeeCount + calc.regularCount + calc.guestCountTotal} người)</span>
@@ -511,7 +522,7 @@ export default function Sessions() {
 
                         <div className="flex justify-between gap-3 border-t pt-1.5 font-medium">
                           <span className="min-w-0">3. Quỹ công ty chi trả:</span>
-                          <span className="shrink-0 text-right font-bold text-emerald-600 dark:text-emerald-400">-{formatVnd(calc.subsidyUsed)}</span>
+                          <span className="shrink-0 text-right font-bold text-success">-{formatVnd(calc.subsidyUsed)}</span>
                         </div>
                         <div className="pl-3 text-muted-foreground">
                           <span>(Chi trả tiền sân & tiền cầu chia đều của {calc.employeeCount} nhân viên)</span>

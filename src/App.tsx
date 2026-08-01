@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
+import { PageSkeleton } from './components/ui/skeleton';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Members = lazy(() => import('./pages/Members'));
@@ -13,7 +14,7 @@ const Pairing = lazy(() => import('./pages/Pairing'));
 function App() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Đang tải…</div>}>
+      <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
