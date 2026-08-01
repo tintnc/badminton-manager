@@ -1,4 +1,5 @@
 import type { AppState, Member, Session, ShuttlecockBatch, Transaction } from '../models/types';
+import { APP_VERSION, defaultSettings } from '../config/defaults';
 
 export interface AppData {
   version: string;
@@ -10,17 +11,8 @@ export interface AppData {
   settings: AppState['settings'];
 }
 
-const defaultSettings: AppState['settings'] = {
-  monthlySupportFund: 3000000,
-  defaultLocation: 'Sân cầu lông C30',
-  defaultStartTime: '19:00',
-  defaultEndTime: '21:00',
-  shuttlecockTubePrice: 300000,
-  shuttlecocksPerTube: 12,
-};
-
 const emptyData = (): AppData => ({
-  version: '1.0.0',
+  version: APP_VERSION,
   lastUpdated: new Date().toISOString(),
   members: [],
   sessions: [],

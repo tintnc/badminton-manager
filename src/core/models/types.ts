@@ -78,6 +78,7 @@ export interface AppState {
     defaultEndTime: string;
     shuttlecockTubePrice: number;  // Price per tube e.g. 300000
     shuttlecocksPerTube: number;   // Shuttlecocks per tube e.g. 12
+    guestFee: number; // Flat fee per casual guest per session, e.g. 35000
   };
   globalMonth: number; // 0-indexed month (0 = January)
   globalYear: number;

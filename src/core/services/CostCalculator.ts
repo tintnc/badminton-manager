@@ -24,45 +24,8 @@ export class CostCalculator {
   }
 
   /**
-   * Calculates the cost split for a session.
-   * Total = Court + Shuttlecock fee
-   * Remaining = Total - Subsidy (if available in fund)
-   * Per Person = Remaining / (Attendees + Guests)
-   */
-  static calculateSessionCost(
-    courtFee: number,
-    shuttlecockFee: number,
-    attendeeCount: number,
-    guestCount: number,
-    availableFund: number
-  ): { totalCost: number; subsidyUsed: number; remainingCost: number; costPerPerson: number; costPerPersonNoSubsidy: number } {
-    const totalCost = courtFee + shuttlecockFee;
-
-    // Use fund to subsidize as much of the total cost as possible
-    const subsidyUsed = Math.min(totalCost, availableFund);
-
-    const remainingCost = totalCost - subsidyUsed;
-    const totalPeople = attendeeCount + guestCount;
-
-    let costPerPerson = totalPeople > 0 ? remainingCost / totalPeople : 0;
-    costPerPerson = Math.round(costPerPerson / 1000) * 1000;
-
-    // Cost without any subsidy (raw split)
-    let costPerPersonNoSubsidy = totalPeople > 0 ? totalCost / totalPeople : 0;
-    costPerPersonNoSubsidy = Math.round(costPerPersonNoSubsidy / 1000) * 1000;
-
-    return {
-      totalCost,
-      subsidyUsed,
-      remainingCost,
-      costPerPerson,
-      costPerPersonNoSubsidy,
-    };
-  }
-
-  /**
    * Calculates the detailed cost breakdown for a session.
-   * - Casual Guests (guests): flat fee 35,000 VND
+   * - Casual Guests (guests): flat fee per guest
    * - Employees: paid by company support fund
    * - Regular members: share remaining cost and deducted from prepaid balance
    */
@@ -70,7 +33,8 @@ export class CostCalculator {
     courtFee: number,
     shuttlecockFee: number,
     attendees: Member[],
-    guestCount: number // Free guests from sessions
+    guestCount: number, // Free guests from sessions
+    guestFee: number = 35000
   ): {
     totalCost: number;
     guestCountTotal: number;
@@ -101,7 +65,7 @@ export class CostCalculator {
     });
 
     const guestCountTotal = guestMemberCount + guestCount;
-    const guestFeeTotal = guestCountTotal * 35000;
+    const guestFeeTotal = guestCountTotal * guestFee;
 
     const totalPeople = employeeCount + regularCount + guestCountTotal;
 
