@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from '../components/ui/label';
 import { Checkbox } from '../components/ui/checkbox';
 import { formatFullDate, formatShortDate, formatVnd } from '../lib/format';
+import { PageHeader } from '../components/ui/page-header';
 
 import { CurrencyInput, IntegerInput } from '../components/ui/currency-input';
 
@@ -296,15 +297,15 @@ export default function Sessions() {
   };
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">Buổi đánh</h1>
-
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Buổi đánh"
+        description="Xem và quản lý danh sách buổi, điểm danh và chi phí chi tiết theo tháng."
+        action={
           <Button onClick={handleGenerate} variant="secondary">
             <Calendar className="mr-2 h-4 w-4" /> Tạo lịch
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredSessions.length === 0 ? (

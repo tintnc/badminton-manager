@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { CostCalculator } from '../core/services/CostCalculator';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { formatVnd } from '../lib/format';
+import { PageHeader } from '../components/ui/page-header';
 
 import { CurrencyInput, IntegerInput } from '../components/ui/currency-input';
 
@@ -89,8 +90,11 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Cài đặt</h1>
-        {statusMessage && (
+      <PageHeader
+        title="Cài đặt"
+        description="Cập nhật giá mặc định và quản lý sao lưu dữ liệu cho toàn bộ nhóm."
+      />
+      {statusMessage && (
           <div
             role="status"
             aria-live="polite"

@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { Label } from '../components/ui/label';
 import { IntegerInput } from '../components/ui/currency-input';
 import { Clock, RefreshCw, RotateCw, Search, Star, Users as UsersIcon } from 'lucide-react';
+import { PageHeader } from '../components/ui/page-header';
 
 interface Match {
   team1: Member[];
@@ -185,17 +186,15 @@ export default function Pairing() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Gợi ý xếp cặp</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Xoay vòng nhiều hiệp theo thời lượng buổi và set 21 điểm.
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => setSelectedIds([])} className="w-full sm:w-auto">
-          <RefreshCw className="h-4 w-4" aria-hidden="true" /> Làm mới
-        </Button>
-      </div>
+      <PageHeader
+        title="Gợi ý xếp cặp"
+        description="Tự động chia đội và xoay vòng dựa trên số người chơi và thời lượng buổi đánh."
+        action={
+          <Button variant="outline" onClick={() => setSelectedIds([])} className="w-full sm:w-auto">
+            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Làm mới
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <Card className="flex flex-col lg:col-span-5 lg:h-[calc(100vh-200px)]">

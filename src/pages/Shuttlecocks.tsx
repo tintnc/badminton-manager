@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { formatFullDate, formatNumber, formatVnd } from '@/lib/format';
 import { ShuttlecockInventoryService } from '@/core/services/ShuttlecockInventoryService';
 import { CostCalculator } from '@/core/services/CostCalculator';
+import { PageHeader } from '@/components/ui/page-header';
 import type { Member, Session, ShuttlecockBatch, Transaction } from '@/core/models/types';
 
 function dateInputValue(date: Date): string {
@@ -424,12 +425,10 @@ export default function Shuttlecocks() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Kho cầu</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Quản lý lô cầu nhập kho, tồn cuối tháng và chi phí cầu đã dùng theo FIFO.
-        </p>
-      </div>
+      <PageHeader
+        title="Kho cầu"
+        description="Quản lý lô cầu nhập kho, tồn kho và chi phí sử dụng FIFO cho mỗi buổi."
+      />
 
       {statusMessage && (
         <div

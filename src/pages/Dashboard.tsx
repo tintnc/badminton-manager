@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store/useAppStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { Wallet, Users, CalendarDays, TrendingDown, CheckCircle2 } from 'lucide-react';
 import { XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import { formatNumber, formatShortDate, formatVnd } from '@/lib/format';
@@ -76,7 +77,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Tổng quan</h1>
+      <PageHeader
+        title="Tổng quan"
+        description="Xem nhanh quỹ, buổi đánh và tần suất tham gia trong tháng hiện tại."
+      />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>

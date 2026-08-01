@@ -97,18 +97,18 @@ export default function Layout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 transform bg-card border-r transition duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
+        className={`fixed inset-y-0 left-0 z-30 w-64 max-h-screen transform bg-card border-r transition duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-center justify-center h-16 border-b">
+        <div className="flex items-center justify-center h-16 border-b px-4">
           <span className="text-xl font-bold text-primary flex items-center gap-2">
             <span className="bg-primary text-primary-foreground p-1 rounded-md">🏸</span>
             BaddyClub
           </span>
         </div>
 
-        <nav className="p-4 space-y-1">
+        <nav role="navigation" aria-label="Primary navigation" className="p-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
             return (
@@ -142,7 +142,7 @@ export default function Layout() {
             >
               <Menu className="h-6 w-6" aria-hidden="true" />
             </button>
-            <span className="hidden text-lg font-bold sm:inline lg:hidden">BaddyClub</span>
+            <span className="text-sm font-semibold text-foreground lg:hidden">BaddyClub</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -250,8 +250,10 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-muted/30">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto bg-muted/30">
+          <div className="mx-auto w-full max-w-screen-2xl px-4 py-5 sm:px-6 lg:px-8">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
