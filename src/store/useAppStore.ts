@@ -1,11 +1,23 @@
 import { create } from 'zustand';
 import type { Member, Session, ShuttlecockBatch, Transaction, AppState } from '../core/models/types';
 import { DataRepository, type AppData } from '../core/repositories/DataRepository';
+import { APP_VERSION, defaultSettings } from '../core/config/defaults';
+import { toast } from '../components/ui/toast';
+import { DemoDataGenerator } from '../core/services/DemoDataGenerator';
 
 const dataRepo = new DataRepository();
 
+/** Debounce window (ms) before a batched write flushes to disk. */
+const PERSIST_DEBOUNCE_MS = 300;
+
 interface StoreState extends AppState {
+  /** Set when the last batched persist failed; null when clean. */
+  persistError?: string | null;
   initialize: () => Promise<void>;
+  /** Forces any pending changes to be persisted now and awaits completion. */
+  flush: () => Promise<void>;
+  /** Replaces the workspace with fabricated demo data for the given month. */
+  generateDemoData: (month: number, year: number) => Promise<void>;
   addMember: (member: Member) => Promise<void>;
   updateMember: (member: Member) => Promise<void>;
   deleteMember: (id: string) => Promise<void>;
@@ -25,15 +37,6 @@ interface StoreState extends AppState {
   setGlobalDate: (month: number, year: number) => void;
 }
 
-const defaultSettings = {
-  monthlySupportFund: 3000000,
-  defaultLocation: 'Sân cầu lông C30',
-  defaultStartTime: '19:00',
-  defaultEndTime: '21:00',
-  shuttlecockTubePrice: 300000,
-  shuttlecocksPerTube: 12,
-};
-
 function toAppData(state: StoreState): AppData {
   return {
     version: state.version,
@@ -46,66 +49,101 @@ function toAppData(state: StoreState): AppData {
   };
 }
 
-export const useAppStore = create<StoreState>((set, get) => ({
-  version: '1.0.0',
-  lastUpdated: new Date().toISOString(),
-  members: [],
-  sessions: [],
-  transactions: [],
-  shuttlecockBatches: [],
-  settings: { ...defaultSettings },
-  globalMonth: new Date().getMonth(),
-  globalYear: new Date().getFullYear(),
+export const useAppStore = create<StoreState>((set, get) => {
+  let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
-  initialize: async () => {
-    const data = await dataRepo.load();
-    set({
-      version: data.version,
-      lastUpdated: data.lastUpdated,
-      members: data.members,
-      sessions: data.sessions,
-      transactions: data.transactions,
-      shuttlecockBatches: data.shuttlecockBatches,
-      settings: { ...defaultSettings, ...data.settings },
-    });
-  },
+  const doPersist = async () => {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    try {
+      await dataRepo.save(toAppData(get()));
+      set({ persistError: null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Không xác định.';
+      set({ persistError: message });
+      toast(`Không thể lưu dữ liệu: ${message}`, 'error');
+    }
+  };
+
+  const schedulePersist = () => {
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(() => {
+      void doPersist();
+    }, PERSIST_DEBOUNCE_MS);
+  };
+
+  const flush = async () => {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+      await doPersist();
+    }
+  };
+
+  return {
+    version: APP_VERSION,
+    lastUpdated: new Date().toISOString(),
+    members: [],
+    sessions: [],
+    transactions: [],
+    shuttlecockBatches: [],
+    settings: { ...defaultSettings },
+    globalMonth: new Date().getMonth(),
+    globalYear: new Date().getFullYear(),
+    persistError: null,
+    flush,
+
+    initialize: async () => {
+      const data = await dataRepo.load();
+      set({
+        version: data.version,
+        lastUpdated: data.lastUpdated,
+        members: data.members,
+        sessions: data.sessions,
+        transactions: data.transactions,
+        shuttlecockBatches: data.shuttlecockBatches,
+        settings: { ...defaultSettings, ...data.settings },
+      });
+    },
 
   addMember: async (member: Member) => {
     set((state: StoreState) => ({ members: [...state.members, member] }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   updateMember: async (member: Member) => {
     set((state: StoreState) => ({
       members: state.members.map((m: Member) => (m.id === member.id ? member : m)),
     }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   deleteMember: async (id: string) => {
     set((state: StoreState) => ({
       members: state.members.filter((m: Member) => m.id !== id),
     }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   addSession: async (session: Session) => {
     set((state: StoreState) => ({ sessions: [...state.sessions, session] }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   updateSession: async (session: Session) => {
     set((state: StoreState) => ({
       sessions: state.sessions.map((s: Session) => (s.id === session.id ? session : s)),
     }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   deleteSession: async (id: string) => {
     set((state: StoreState) => ({
       sessions: state.sessions.filter((s: Session) => s.id !== id),
     }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   saveSessions: async (sessions: Session[]) => {
@@ -118,55 +156,55 @@ export const useAppStore = create<StoreState>((set, get) => ({
       });
       return { sessions: newSessions };
     });
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   addShuttlecockBatch: async (batch: ShuttlecockBatch) => {
     set((state: StoreState) => ({ shuttlecockBatches: [...state.shuttlecockBatches, batch] }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   updateShuttlecockBatch: async (batch: ShuttlecockBatch) => {
     set((state: StoreState) => ({
       shuttlecockBatches: state.shuttlecockBatches.map((item) => (item.id === batch.id ? batch : item)),
     }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   deleteShuttlecockBatch: async (id: string) => {
     set((state: StoreState) => ({
       shuttlecockBatches: state.shuttlecockBatches.filter((batch) => batch.id !== id),
     }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   saveShuttlecockBatches: async (batches: ShuttlecockBatch[]) => {
     set({ shuttlecockBatches: batches });
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   addTransaction: async (transaction: Transaction) => {
     set((state: StoreState) => ({ transactions: [...state.transactions, transaction] }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   saveTransactions: async (transactions: Transaction[]) => {
     set({ transactions });
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   deleteTransactionsBySession: async (sessionId: string) => {
     set((state: StoreState) => ({
       transactions: state.transactions.filter(t => t.relatedSessionId !== sessionId),
     }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   deleteTransactionByMemberAndSession: async (memberId: string, sessionId: string) => {
     set((state: StoreState) => ({
       transactions: state.transactions.filter(t => !(t.relatedMemberId === memberId && t.relatedSessionId === sessionId)),
     }));
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   updateSettings: async (newSettings: Partial<AppState['settings']>) => {
@@ -174,10 +212,26 @@ export const useAppStore = create<StoreState>((set, get) => ({
       const updated = { ...state.settings, ...newSettings };
       return { settings: updated };
     });
-    await dataRepo.save(toAppData(get()));
+    schedulePersist();
   },
 
   setGlobalDate: (month: number, year: number) => {
     set({ globalMonth: month, globalYear: year });
   },
-}));
+  generateDemoData: async (month: number, year: number) => {
+    const demo = DemoDataGenerator.generate(year, month);
+    set({
+      version: APP_VERSION,
+      lastUpdated: new Date().toISOString(),
+      members: demo.members,
+      sessions: demo.sessions,
+      transactions: demo.transactions,
+      shuttlecockBatches: demo.shuttlecockBatches,
+      globalMonth: month,
+      globalYear: year,
+    });
+    schedulePersist();
+    toast(`Đã tạo dữ liệu demo cho tháng ${month + 1}/${year}.`);
+  },
+  };
+});
