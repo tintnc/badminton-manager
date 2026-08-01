@@ -93,7 +93,7 @@ export default function Finance() {
       totalUnpaidSessions: rows.reduce((sum, row) => sum + row.unpaidSessions.length, 0),
       totalDebtors: rows.length,
     };
-  }, [currentMonthStr, members, sessions]);
+  }, [currentMonthStr, members, sessions, settings.guestFee]);
 
   const getGuestDebt = (member: Member, paidSessionIds: string[]) =>
     MemberFinanceService.getGuestDebt({ ...member, paidSessionIds }, sessions, settings.guestFee);
