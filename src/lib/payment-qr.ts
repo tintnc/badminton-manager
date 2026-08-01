@@ -1,8 +1,8 @@
 import type { Member, Session } from '@/core/models/types';
 
 export const guestPaymentQrConfig = {
-  bank: 'ACB',
-  account: '2180347',
+  bank: import.meta.env.VITE_QR_BANK ?? 'ACB',
+  account: import.meta.env.VITE_QR_ACCOUNT ?? '2180347',
 };
 
 export function normalizeTransferName(value: string): string {
