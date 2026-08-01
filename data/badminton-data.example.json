@@ -1,0 +1,521 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-07-14T00:00:00.000Z",
+  "members": [
+    {
+      "id": "m1",
+      "name": "Minh Nguyễn",
+      "nickname": "Bboy",
+      "phone": "0901 000 001",
+      "joinDate": "2026-03-10T00:00:00.000Z",
+      "isActive": true,
+      "debt": 0,
+      "notes": "Thành viên demo",
+      "skillLevel": 4,
+      "membershipType": "employee",
+      "prepaidBalance": 0
+    },
+    {
+      "id": "m2",
+      "name": "Thu Trần",
+      "nickname": "",
+      "phone": "0901 000 002",
+      "joinDate": "2026-03-15T00:00:00.000Z",
+      "isActive": true,
+      "debt": 0,
+      "notes": "",
+      "skillLevel": 3,
+      "membershipType": "regular",
+      "prepaidBalance": 150000,
+      "paidSessionIds": []
+    },
+    {
+      "id": "m3",
+      "name": "Huy Lê",
+      "nickname": "Nhỏ",
+      "phone": "",
+      "joinDate": "2026-04-02T00:00:00.000Z",
+      "isActive": true,
+      "debt": 0,
+      "notes": "",
+      "skillLevel": 2,
+      "membershipType": "regular",
+      "prepaidBalance": 320000,
+      "paidSessionIds": []
+    },
+    {
+      "id": "m4",
+      "name": "Lan Phạm",
+      "nickname": "",
+      "phone": "",
+      "joinDate": "2026-04-20T00:00:00.000Z",
+      "isActive": true,
+      "debt": 0,
+      "notes": "",
+      "skillLevel": 2,
+      "membershipType": "employee",
+      "prepaidBalance": 0
+    },
+    {
+      "id": "m5",
+      "name": "Nam Đỗ",
+      "nickname": "",
+      "phone": "0901 000 005",
+      "joinDate": "2026-05-05T00:00:00.000Z",
+      "isActive": true,
+      "debt": 0,
+      "notes": "Khách vãng lai demo",
+      "skillLevel": 3,
+      "membershipType": "guest",
+      "prepaidBalance": 0,
+      "paidSessionIds": ["s1"]
+    },
+    {
+      "id": "m6",
+      "name": "Trang Võ",
+      "nickname": "",
+      "phone": "",
+      "joinDate": "2026-05-18T00:00:00.000Z",
+      "isActive": true,
+      "debt": 0,
+      "notes": "",
+      "skillLevel": 3,
+      "membershipType": "employee",
+      "prepaidBalance": 0
+    },
+    {
+      "id": "m7",
+      "name": "Quân Hoàng",
+      "nickname": "",
+      "phone": "",
+      "joinDate": "2026-06-01T00:00:00.000Z",
+      "isActive": true,
+      "debt": 0,
+      "notes": "",
+      "skillLevel": 2,
+      "membershipType": "regular",
+      "prepaidBalance": 95000,
+      "paidSessionIds": []
+    },
+    {
+      "id": "m8",
+      "name": "Mai Bùi",
+      "nickname": "",
+      "phone": "",
+      "joinDate": "2026-06-10T00:00:00.000Z",
+      "isActive": true,
+      "debt": 0,
+      "notes": "Khách vãng lai demo",
+      "skillLevel": 2,
+      "membershipType": "guest",
+      "prepaidBalance": 0,
+      "paidSessionIds": ["s4"]
+    },
+    {
+      "id": "m9",
+      "name": "Bảo Đặng",
+      "nickname": "Dế",
+      "phone": "",
+      "joinDate": "2026-06-22T00:00:00.000Z",
+      "isActive": true,
+      "debt": 0,
+      "notes": "",
+      "skillLevel": 4,
+      "membershipType": "regular",
+      "prepaidBalance": 200000,
+      "paidSessionIds": []
+    },
+    {
+      "id": "m10",
+      "name": "Linh Ngô",
+      "nickname": "",
+      "phone": "0901 000 010",
+      "joinDate": "2026-07-01T00:00:00.000Z",
+      "isActive": true,
+      "debt": 0,
+      "notes": "Khách vãng lai demo",
+      "skillLevel": 1,
+      "membershipType": "guest",
+      "prepaidBalance": 0,
+      "paidSessionIds": []
+    }
+  ],
+  "sessions": [
+    {
+      "id": "s1",
+      "date": "2026-07-02",
+      "startTime": "19:00",
+      "endTime": "21:00",
+      "location": "Sân cầu lông C30",
+      "status": "completed",
+      "courtFee": 300000,
+      "shuttlecocksUsed": 3,
+      "shuttlecockFee": 75000,
+      "fundSubsidyUsed": 187500,
+      "totalCost": 375000,
+      "attendeeIds": ["m1", "m2", "m3", "m4", "m5"],
+      "guestCount": 0,
+      "costPerPerson": 15000,
+      "costPerPersonNoSubsidy": 75000,
+      "shuttlecockUsages": [
+        {
+          "batchId": "b1",
+          "quantity": 3,
+          "unitCost": 25000,
+          "amount": 75000
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "date": "2026-07-07",
+      "startTime": "19:00",
+      "endTime": "21:00",
+      "location": "Sân cầu lông C30",
+      "status": "completed",
+      "courtFee": 300000,
+      "shuttlecocksUsed": 4,
+      "shuttlecockFee": 100000,
+      "fundSubsidyUsed": 160000,
+      "totalCost": 400000,
+      "attendeeIds": ["m1", "m2", "m3", "m6", "m7", "m8"],
+      "guestCount": 0,
+      "costPerPerson": 17000,
+      "costPerPersonNoSubsidy": 67000,
+      "shuttlecockUsages": [
+        {
+          "batchId": "b1",
+          "quantity": 4,
+          "unitCost": 25000,
+          "amount": 100000
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "date": "2026-07-09",
+      "startTime": "19:00",
+      "endTime": "21:00",
+      "location": "Sân cầu lông C30",
+      "status": "completed",
+      "courtFee": 300000,
+      "shuttlecocksUsed": 2,
+      "shuttlecockFee": 50000,
+      "fundSubsidyUsed": 175000,
+      "totalCost": 350000,
+      "attendeeIds": ["m1", "m4", "m6", "m7"],
+      "guestCount": 0,
+      "costPerPerson": 13000,
+      "costPerPersonNoSubsidy": 88000,
+      "shuttlecockUsages": [
+        {
+          "batchId": "b1",
+          "quantity": 2,
+          "unitCost": 25000,
+          "amount": 50000
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "date": "2026-07-14",
+      "startTime": "19:00",
+      "endTime": "21:00",
+      "location": "Sân cầu lông C30",
+      "status": "completed",
+      "courtFee": 300000,
+      "shuttlecocksUsed": 3,
+      "shuttlecockFee": 75000,
+      "fundSubsidyUsed": 150000,
+      "totalCost": 375000,
+      "attendeeIds": ["m2", "m3", "m5", "m8", "m1"],
+      "guestCount": 1,
+      "costPerPerson": 15000,
+      "costPerPersonNoSubsidy": 75000,
+      "shuttlecockUsages": [
+        {
+          "batchId": "b1",
+          "quantity": 3,
+          "unitCost": 25000,
+          "amount": 75000
+        }
+      ]
+    },
+    {
+      "id": "s5",
+      "date": "2026-07-16",
+      "startTime": "19:00",
+      "endTime": "21:00",
+      "location": "Sân cầu lông C30",
+      "status": "planned",
+      "courtFee": 0,
+      "shuttlecocksUsed": 0,
+      "shuttlecockFee": 0,
+      "fundSubsidyUsed": 0,
+      "totalCost": 0,
+      "attendeeIds": [],
+      "guestCount": 0,
+      "costPerPerson": 0,
+      "costPerPersonNoSubsidy": 0
+    },
+    {
+      "id": "s6",
+      "date": "2026-07-21",
+      "startTime": "19:00",
+      "endTime": "21:00",
+      "location": "Sân cầu lông C30",
+      "status": "planned",
+      "courtFee": 0,
+      "shuttlecocksUsed": 0,
+      "shuttlecockFee": 0,
+      "fundSubsidyUsed": 0,
+      "totalCost": 0,
+      "attendeeIds": [],
+      "guestCount": 0,
+      "costPerPerson": 0,
+      "costPerPersonNoSubsidy": 0
+    },
+    {
+      "id": "s7",
+      "date": "2026-07-23",
+      "startTime": "19:00",
+      "endTime": "21:00",
+      "location": "Sân cầu lông C30",
+      "status": "planned",
+      "courtFee": 0,
+      "shuttlecocksUsed": 0,
+      "shuttlecockFee": 0,
+      "fundSubsidyUsed": 0,
+      "totalCost": 0,
+      "attendeeIds": [],
+      "guestCount": 0,
+      "costPerPerson": 0,
+      "costPerPersonNoSubsidy": 0
+    },
+    {
+      "id": "s8",
+      "date": "2026-07-28",
+      "startTime": "19:00",
+      "endTime": "21:00",
+      "location": "Sân cầu lông C30",
+      "status": "planned",
+      "courtFee": 0,
+      "shuttlecocksUsed": 0,
+      "shuttlecockFee": 0,
+      "fundSubsidyUsed": 0,
+      "totalCost": 0,
+      "attendeeIds": [],
+      "guestCount": 0,
+      "costPerPerson": 0,
+      "costPerPersonNoSubsidy": 0
+    }
+  ],
+  "transactions": [
+    {
+      "id": "t1",
+      "date": "2026-07-01T00:00:00.000Z",
+      "type": "income",
+      "category": "member_payment",
+      "amount": 150000,
+      "description": "Thành viên Thu nạp quỹ (+150,000 ₫)",
+      "relatedMemberId": "m2"
+    },
+    {
+      "id": "t2",
+      "date": "2026-07-01T00:00:00.000Z",
+      "type": "income",
+      "category": "member_payment",
+      "amount": 320000,
+      "description": "Thành viên Huy nạp quỹ (+320,000 ₫)",
+      "relatedMemberId": "m3"
+    },
+    {
+      "id": "t3",
+      "date": "2026-07-01T00:00:00.000Z",
+      "type": "income",
+      "category": "member_payment",
+      "amount": 95000,
+      "description": "Thành viên Quân nạp quỹ (+95,000 ₫)",
+      "relatedMemberId": "m7"
+    },
+    {
+      "id": "t4",
+      "date": "2026-07-01T00:00:00.000Z",
+      "type": "income",
+      "category": "member_payment",
+      "amount": 200000,
+      "description": "Thành viên Bảo nạp quỹ (+200,000 ₫)",
+      "relatedMemberId": "m9"
+    },
+    {
+      "id": "t5",
+      "date": "2026-07-01T00:00:00.000Z",
+      "type": "expense",
+      "category": "shuttlecock_purchase",
+      "amount": 300000,
+      "description": "Mua cầu nhập kho (12 trái) - lô VNB demo",
+      "relatedShuttlecockBatchId": "b1"
+    },
+    {
+      "id": "t6",
+      "date": "2026-07-02",
+      "type": "expense",
+      "category": "court_fee",
+      "amount": 300000,
+      "description": "Tiền sân buổi 02-07",
+      "relatedSessionId": "s1"
+    },
+    {
+      "id": "t7",
+      "date": "2026-07-02",
+      "type": "expense",
+      "category": "shuttlecock_fee",
+      "amount": 75000,
+      "description": "Tiền cầu buổi 02-07 (3 trái từ kho)",
+      "relatedSessionId": "s1"
+    },
+    {
+      "id": "t8",
+      "date": "2026-07-02",
+      "type": "income",
+      "category": "support_fund",
+      "amount": 187500,
+      "description": "Quỹ hỗ trợ buổi 02-07 (1 nhân viên)",
+      "relatedSessionId": "s1"
+    },
+    {
+      "id": "t9",
+      "date": "2026-07-07",
+      "type": "expense",
+      "category": "court_fee",
+      "amount": 300000,
+      "description": "Tiền sân buổi 07-07",
+      "relatedSessionId": "s2"
+    },
+    {
+      "id": "t10",
+      "date": "2026-07-07",
+      "type": "expense",
+      "category": "shuttlecock_fee",
+      "amount": 100000,
+      "description": "Tiền cầu buổi 07-07 (4 trái từ kho)",
+      "relatedSessionId": "s2"
+    },
+    {
+      "id": "t11",
+      "date": "2026-07-07",
+      "type": "income",
+      "category": "support_fund",
+      "amount": 160000,
+      "description": "Quỹ hỗ trợ buổi 07-07 (2 nhân viên)",
+      "relatedSessionId": "s2"
+    },
+    {
+      "id": "t12",
+      "date": "2026-07-09",
+      "type": "expense",
+      "category": "court_fee",
+      "amount": 300000,
+      "description": "Tiền sân buổi 09-07",
+      "relatedSessionId": "s3"
+    },
+    {
+      "id": "t13",
+      "date": "2026-07-09",
+      "type": "expense",
+      "category": "shuttlecock_fee",
+      "amount": 50000,
+      "description": "Tiền cầu buổi 09-07 (2 trái từ kho)",
+      "relatedSessionId": "s3"
+    },
+    {
+      "id": "t14",
+      "date": "2026-07-09",
+      "type": "income",
+      "category": "support_fund",
+      "amount": 175000,
+      "description": "Quỹ hỗ trợ buổi 09-07 (3 nhân viên)",
+      "relatedSessionId": "s3"
+    },
+    {
+      "id": "t15",
+      "date": "2026-07-14",
+      "type": "expense",
+      "category": "court_fee",
+      "amount": 300000,
+      "description": "Tiền sân buổi 14-07",
+      "relatedSessionId": "s4"
+    },
+    {
+      "id": "t16",
+      "date": "2026-07-14",
+      "type": "expense",
+      "category": "shuttlecock_fee",
+      "amount": 75000,
+      "description": "Tiền cầu buổi 14-07 (3 trái từ kho)",
+      "relatedSessionId": "s4"
+    },
+    {
+      "id": "t17",
+      "date": "2026-07-14",
+      "type": "income",
+      "category": "support_fund",
+      "amount": 150000,
+      "description": "Quỹ hỗ trợ buổi 14-07 (1 nhân viên)",
+      "relatedSessionId": "s4"
+    },
+    {
+      "id": "t18",
+      "date": "2026-07-14",
+      "type": "income",
+      "category": "member_payment",
+      "amount": 35000,
+      "description": "Thu tiền vãng lai Nam buổi 02/07/2026",
+      "relatedMemberId": "m5",
+      "relatedSessionId": "s1"
+    },
+    {
+      "id": "t19",
+      "date": "2026-07-14",
+      "type": "income",
+      "category": "member_payment",
+      "amount": 35000,
+      "description": "Thu tiền vãng lai Mai buổi 11/07/2026",
+      "relatedMemberId": "m8",
+      "relatedSessionId": "s2"
+    }
+  ],
+  "shuttlecockBatches": [
+    {
+      "id": "b1",
+      "purchaseDate": "2026-07-01T00:00:00.000Z",
+      "tubes": 1,
+      "shuttlecocksPerTube": 12,
+      "totalShuttlecocks": 12,
+      "remainingShuttlecocks": 0,
+      "totalCost": 300000,
+      "unitCost": 25000,
+      "notes": "Lô VNB demo"
+    },
+    {
+      "id": "b2",
+      "purchaseDate": "2026-07-14T00:00:00.000Z",
+      "tubes": 1,
+      "shuttlecocksPerTube": 12,
+      "totalShuttlecocks": 12,
+      "remainingShuttlecocks": 12,
+      "totalCost": 300000,
+      "unitCost": 25000,
+      "notes": "Lô VNB demo tháng 7"
+    }
+  ],
+  "settings": {
+    "monthlySupportFund": 3000000,
+    "defaultLocation": "Sân cầu lông C30",
+    "defaultStartTime": "19:00",
+    "defaultEndTime": "21:00",
+    "shuttlecockTubePrice": 300000,
+    "shuttlecocksPerTube": 12,
+    "guestFee": 35000
+  }
+}

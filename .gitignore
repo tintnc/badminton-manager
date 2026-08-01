@@ -12,9 +12,10 @@ dist
 dist-ssr
 *.local
 
-# Local app data
-# data/*.json
+# Local app data (live club data is not committed)
+data/*.json
 !data/.gitkeep
+!data/*.example.json
 
 # Editor directories and files
 .vscode/*
