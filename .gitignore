@@ -17,6 +17,15 @@ data/*.json
 !data/.gitkeep
 !data/*.example.json
 
+# Agent skills / tooling (installed locally)
+.opencode/
+.agents/
+
+# Environment variables (kept out of version control)
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
